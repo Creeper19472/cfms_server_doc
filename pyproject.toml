@@ -3,6 +3,6 @@ requires = ["flit_core >=3.2,<4"]
 build-backend = "flit_core.buildapi"
 
 [project]
-name = "lumache"
+name = "CFMS Server"
 authors = [{name = "Creeper19472", email = "creeper19472@crpteam.club"}]
 dynamic = ["version", "description"]
