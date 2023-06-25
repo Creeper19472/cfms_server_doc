@@ -1,22 +1,24 @@
-欢迎访问 CFMS 开发文档！
+欢迎访问 CFMS 开发者手册！
 ===================================
 
-**CFMS** (Classified File Management System) 是用于分类化管理机密文档的一套完全系统。
+**CFMS** (Classified File Management System) 是用于分类化管理多密级文档的一整套系统。
 本开发手册将系统介绍有关CFMS的相关技术性用法。
 
-Check out the :doc:`usage` section for further information, including
-how to :ref:`installation` the project.
+CFMS 是自由软件，不做任何保证：在特定的条件下，任何人均可自由修改和再分发本软件，并享有其他多种自由。
+请查阅本项目的许可证以获取更多信息。
 
 .. note::
 
-   仍在早期开发阶段。每一个新版本都可能发生大的改动；因此，本文档或不能及时反映最新版本的特性。
+   仍在早期开发阶段。每一个新版本都可能发生大的改动；因此，本文档或不能及时反映最新版本的特性，甚至在某些时候造成误导。
 
 内容
 --------
 
 .. toctree::
+   欢迎 <self>
 
    在开始之前 <before_we_begin>
    安装与配置 <setup>
    数据接口 <api>
+   权限与用户组 <groups_and_rights>
 

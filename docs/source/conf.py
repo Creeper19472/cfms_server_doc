@@ -6,8 +6,8 @@ project = 'CFMS'
 copyright = '2023, Creeper Team'
 author = 'Creeper19472'
 
-release = '0.1'
-version = '0.1.0'
+release = '1.0'
+version = '1.0.0.20230623_alpha'
 
 # -- General configuration
 
