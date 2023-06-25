@@ -25,22 +25,10 @@ CFMS 服务端运行在 Python 3.11 及以上版本，并因新增语法而无�
 
    (.venv) $ pip install -r requirements.txt
 
-Creating recipes
-----------------
+3. 初次启动
 
-To retrieve a list of random ingredients,
-you can use the ``lumache.get_random_ingredients()`` function:
+.. code-block:: console
 
-.. autofunction:: lumache.get_random_ingredients
+   $ python cfms_server.py
 
-The ``kind`` parameter should be either ``"meat"``, ``"fish"``,
-or ``"veggies"``. Otherwise, :py:func:`lumache.get_random_ingredients`
-will raise an exception.
-
-.. autoexception:: lumache.InvalidKindError
-
-For example:
-
->>> import lumache
->>> lumache.get_random_ingredients()
-['shells', 'gorgonzola', 'parsley']
+由于数据库和RSA密钥的设置需要一些时间，您可能需要等待半分钟左右来完成初始化过程。
