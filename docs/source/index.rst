@@ -19,7 +19,7 @@ CFMS 是自由软件，不做任何保证：在特定的条件下，任何人均
 
    在开始之前 <before_we_begin>
    安装与配置 <setup>
-   数据接口 <api>
+   请求与响应规范 <api_standards>
    权限与用户组 <groups_and_rights>
 
    未来要做的事 <todo>

@@ -8,3 +8,8 @@
 1. ConnHandler:: :python:`handle_getConfig()`
 2. debug 模式的进一步调整
 3. ifMatchRequirements 的错误检查
+4. groups 和 users 表的权限增加 expire 功能
+5. requires 栏更名为 access_rules 
+6. 增加栏目：user_with_grants （文档与目录权限）
+7. verifyAccess() 递归函数 
+8. 权限：deny {}
