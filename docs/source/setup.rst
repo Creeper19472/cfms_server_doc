@@ -22,7 +22,7 @@ CFMS 服务端运行在 Python 3.11 及以上版本，并因新增语法而无�
 2. 安装必要的模块（这需要设备已经安装 pip）
 
 .. code-block:: console
-
+   
    (.venv) $ pip install -r requirements.txt
 
 3. 初次启动

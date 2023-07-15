@@ -6,6 +6,10 @@ API
 .. autosummary::
    :toctree: generated
 
+.. role:: python(code)
+   :language: python
+
+
 通常而言，CFMS 的服务端被默认设置为在 0.0.0.0:5103 端口上进行监听，
 受技术所限尚不支持 IPv6 协议。
 
@@ -31,6 +35,8 @@ CFMS 使用 TCP 协议进行通信，因此，可以在 Python 环境下使用�
 .. code-block:: python
    :linenos:
 
+   ...
+
    receive = self.__recv()
    
    if receive == "hello":
@@ -49,18 +55,10 @@ CFMS 使用 TCP 协议进行通信，因此，可以在 Python 环境下使用�
       "public_key": self.public_key.export_key("PEM").decode(),
       "code": 0
    }))
-
-   receive_encrypted = conn.recv(self.BUFFER_SIZE) # 这里还不能用 self.__recv() 方法：是加密的, 无法decode()
-
-   decrypted_data = self.pri_cipher.decrypt(receive_encrypted) # 得到AES密钥
-
-   print(f"key: {decrypted_data}")
-
-   self.aes_key = decrypted_data
-   
-   self.encrypted_connection = True # 激活加密传输标识
    
    return True
+
+   ...
 
 这段代码的意义是，首先等待客户端发送一内容为 "hello" 的明文请求；如果收到的内容并非这一明文，则服务端将断开与客户端的连接。
 
@@ -78,8 +76,8 @@ CFMS 使用 TCP 协议进行通信，因此，可以在 Python 环境下使用�
 
    {
    "version": 1,
-   "request_type": "", # 请求名（类型），如 getDocument
-   "request": { # 包含请求所需的应提交的信息
+   "request": "", # 请求名（类型），如 getDocument
+   "data": { # 包含请求所需的应提交的信息
       ...
    },
    "auth": { # 大多数请求所必须附带的身份认证标头
