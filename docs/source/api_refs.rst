@@ -242,6 +242,8 @@ request::createFile
 
 该请求用于创建一个新文件。
 
+**限制**：新的文件ID长度不得大于64.
+
 .. versionchanged:: 1.0.0.20230720_alpha
     现在请求由 `uploadFile` 更名为 `createFile` 。
 
@@ -256,12 +258,14 @@ request::createUser
 
 创建新用户。
 
+**限制**：新的用户ID长度不得大于32，昵称长度不得大于64.
 
 request::createDir
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 创建新文件夹。
 
+**限制**：新的文件夹ID长度不得大于64.
 
 .. _operateDir:
 
@@ -354,6 +358,7 @@ request::createGroup
 
 创建用户组。
 
+**限制**：新的用户组名长度不得大于32.
 
 request::getUserProperties
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
