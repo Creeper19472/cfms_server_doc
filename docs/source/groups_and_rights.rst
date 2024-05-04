@@ -7,30 +7,23 @@
 .. role:: python(code)
    :language: python
 
-权限
+
+CFMS 的权限实质为一字符串，经由服务端的内部逻辑实现更加复杂的属性。
+
+.. versionchanged:: 1.0.0_202403+
+   现在权限与用户组一并于 `user_permissions` 数据表中存贮。
+
+
+user_permissions 表
 -----------------
 
-CFMS 的权限由一字符串命名，但有特殊用法规定用户和用户组所属的权限的更加复杂的属性。
+该数据表拥有以下几个栏目： `user_id`, `perm_name`, `perm_type`, `mode`, `expire_time`.
 
-用户权限被存贮在 users 表下的 rights 栏中，并符合以下格式：
+任何用户拥有的权限或用户组，都被存放在此，每一行下称为一则“条目”。
 
-.. code-block:: python
-    :linenos:
+`expire_time` 描述每一条目的过期时间。通过设置该栏的值小于或等于0，可声明该条目永不过期。
 
-    {
-        "read": 
-            {
-                "expire": 0
-            },
-        ...
-    }
-
-它是一个合法的 json 文本，以权限的名称作为键名，对应的键值应当为一个字典，这个字典贮存
-描述该权限在该用户上的属性。目前为止，CFMS 仅支持以一个属性对其进行描述：:python:`expire`。
-
-:python:`expire` 描述该权限的过期时间。通过设置为0（或不包含此键），可描述该权限为用户永久拥有。
-
-CFMS 将定期检查并移除过期的权限（还有用户组）。
+尚不支持确定一则条目的生效起始时间。CFMS 服务端将在未来的版本中定期检查并移除过期的条目。
 
 此外，用户也将从其所在的用户组继承权限。详情请参考 :ref:`usergroup` 一节。 
 
@@ -41,10 +34,18 @@ CFMS 将定期检查并移除过期的权限（还有用户组）。
 
 用户组
 ----------------------
-CFMS 的用户组定义储存在 general.db 下的 groups 表中，由 InitDB() 进行初始化。
+CFMS 的用户组定义与三个表有关： `groups`, `group_rights` 以及 `group_metadata`。
 
-目前的默认用户组有： :python:`user`, :python:`sysop` 。 
+前二者用以描述组本身，以及组具有的权限（组不可能拥有其他组）。
 
+目前的默认用户组有： :python:`user`, :python:`sysop` 。它们被以和任何其他用户组一样的方式
+被定义在数据表中，但删除它们可能导致不可预料的问题。
+
+.. note::
+
+    上述用户组不可删除的主要原因是存在通过判断用户是否属于某指定用户组来运作的逻辑。
+
+    尽管支持，但我们建议应当尽量避免这样做，因为这可能影响用户组配置的灵活性。
 
 .. _match_rules:
 
@@ -164,20 +165,12 @@ CFMS 的用户组定义储存在 general.db 下的 groups 表中，由 InitDB() 
 
 如果满足任一条件，则该规则将返回为真。
 
-内部逻辑上，函数将把一个空的列表返回为真。同时，函数也将视 user 用户组为所有人拥有：
+内部逻辑上，函数将把一个空的列表返回为真。同时，函数也将视 user 用户组为所有人拥有。
 
-.. code-block:: python
-   :linenos:
+.. note::
 
-    def hasGroups(self, groups=[]):
-        if not groups:
-            return True # 没有则返回为真
-        for i in groups:
-            if i == "user":
-                continue # user 用户组跳过
-            if not i in self.groups:
-                return False
-        return True
+    在过去的版本中曾经存在 :python:`user.hasGroups()` 和 :python:`user.hasRights()` 等函数用以
+    执行判断，但这类函数已被移除。应当使用形同 :python:`x in user.rights` 的语法进行替代。
 
 因此，groups 字典 require 的空列表将在检查时被返回为真，即无论 match 为 any 或 all 时都将返回为真。
 
