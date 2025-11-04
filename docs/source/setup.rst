@@ -289,3 +289,4 @@ SSL 证书错误
 - 查看 :doc:`api_refs` 了解所有可用的 API 接口
 - 学习 :doc:`groups_and_rights` 了解权限系统
 - 探索 :doc:`access_control` 了解访问控制机制
+- 使用 :doc:`certtools` 生成自定义 SSL 证书
