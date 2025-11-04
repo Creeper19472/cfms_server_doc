@@ -299,7 +299,17 @@ pem2der.py - PEM 转 DER 格式
 
 .. code-block:: console
 
-   $ cat ee_cert.pem int_cert.pem root_cert.pem > fullchain.pem
+   $ cat ee_cert.pem int_cert.pem > fullchain.pem
+
+.. note::
+
+   对于 TLS 服务器，通常只需要包含终端实体证书和中间 CA 证书。根 CA 证书应该已经在客户端的信任存储中，不需要在证书链中传输。包含根证书会不必要地增加证书链大小。
+
+如果需要完整的证书链（例如用于某些测试场景），可以包含根证书：
+
+.. code-block:: console
+
+   $ cat ee_cert.pem int_cert.pem root_cert.pem > fullchain_with_root.pem
 
 6. 部署到 CFMS
 ^^^^^^^^^^^^^^
