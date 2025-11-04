@@ -43,6 +43,12 @@ CFMS 是自由软件，采用 Apache 2.0 许可证发布。在特定的条件下
    审计日志 <audit>
 
 .. toctree::
+   :maxdepth: 2
+   :caption: 工具
+
+   证书工具 <certtools>
+
+.. toctree::
    :maxdepth: 1
    :caption: 其他
 
