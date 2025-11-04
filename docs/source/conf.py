@@ -3,11 +3,11 @@
 # -- Project information
 
 project = 'CFMS'
-copyright = '2023, Creeper Team'
+copyright = '2024, Creeper Team'
 author = 'Creeper19472'
 
-release = '1.0'
-version = '1.0.0.20230623_alpha'
+release = '0.1'
+version = '0.1.0.250919_alpha'
 
 # -- General configuration
 
