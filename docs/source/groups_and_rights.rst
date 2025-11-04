@@ -1,233 +1,594 @@
 权限与用户组
 ===================================
 
-.. autosummary::
-   :toctree: generated
+CFMS 实现了完整的基于角色的访问控制（RBAC）系统，通过权限和用户组的组合来管理用户对资源的访问。
 
-.. role:: python(code)
-   :language: python
+.. contents:: 目录
+   :local:
+   :depth: 2
 
+权限系统概述
+------------
 
-CFMS 的权限实质为一字符串，经由服务端的内部逻辑实现更加复杂的属性。
+权限本质
+^^^^^^^^
 
-.. versionchanged:: 1.0.0_202403+
-   现在权限与用户组一并于 `user_permissions` 数据表中存贮。
+在 CFMS 中，权限（Permission）是一个字符串标识符，表示用户可以执行的特定操作。
+权限通过服务端的内部逻辑实现复杂的访问控制。
 
+权限特点：
 
-user_permissions 表
------------------
+- **细粒度控制**：每个操作都有对应的权限要求
+- **时间限制**：权限可以设置生效时间和过期时间
+- **灵活组合**：权限可以直接授予用户，也可以通过用户组继承
 
-该数据表拥有以下几个栏目： `user_id`, `perm_name`, `perm_type`, `mode`, `expire_time`.
+权限来源
+^^^^^^^^
 
-任何用户拥有的权限或用户组，都被存放在此，每一行下称为一则“条目”。
+用户的权限来自两个途径：
 
-`expire_time` 描述每一条目的过期时间。通过设置该栏的值小于或等于0，可声明该条目永不过期。
+1. **直接权限**：直接授予给用户的权限
+2. **组权限**：用户通过所属用户组继承的权限
 
-尚不支持确定一则条目的生效起始时间。CFMS 服务端将在未来的版本中定期检查并移除过期的条目。
+最终权限是两者的并集。
 
-此外，用户也将从其所在的用户组继承权限。详情请参考 :ref:`usergroup` 一节。 
+权限分类
+--------
 
-.. versionadded:: 1.0.0
+系统管理权限
+^^^^^^^^^^^^
 
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-.. _usergroup:
+   * - 权限名称
+     - 说明
+   * - shutdown
+     - 关闭服务器
+   * - manage_system
+     - 系统管理权限
+   * - apply_lockdown
+     - 启用/禁用系统锁定模式
+   * - bypass_lockdown
+     - 在锁定模式下不受限制
 
-用户组
-----------------------
-CFMS 的用户组定义与三个表有关： `groups`, `group_rights` 以及 `group_metadata`。
+文档管理权限
+^^^^^^^^^^^^
 
-前二者用以描述组本身，以及组具有的权限（组不可能拥有其他组）。
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-目前的默认用户组有： :python:`user`, :python:`sysop` 。它们被以和任何其他用户组一样的方式
-被定义在数据表中，但删除它们可能导致不可预料的问题。
+   * - 权限名称
+     - 说明
+   * - create_document
+     - 在有权访问的目录创建文档
+   * - super_create_document
+     - 在任何目录创建文档
+   * - delete_document
+     - 删除文档
+   * - rename_document
+     - 重命名文档
+   * - move
+     - 移动文档或目录
 
-.. note::
+目录管理权限
+^^^^^^^^^^^^
 
-    上述用户组不可删除的主要原因是存在通过判断用户是否属于某指定用户组来运作的逻辑。
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-    尽管支持，但我们建议应当尽量避免这样做，因为这可能影响用户组配置的灵活性。
+   * - 权限名称
+     - 说明
+   * - create_directory
+     - 在有权访问的目录创建子目录
+   * - super_create_directory
+     - 在任何位置创建目录
+   * - list_directory
+     - 列出目录内容
+   * - super_list_directory
+     - 列出任何目录内容
+   * - delete_directory
+     - 删除目录
+   * - rename_directory
+     - 重命名目录
 
-.. _match_rules:
+用户管理权限
+^^^^^^^^^^^^
 
-伪路径权限的匹配规则
-----------------------
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-有时候我们希望指定的权限持有者和用户组能够访问特定的目录或是文档，它们在CFMS中由一个“伪目录表”加以组织；
-而这种需求在某些时候可能会显得较为复杂。
+   * - 权限名称
+     - 说明
+   * - create_user
+     - 创建新用户
+   * - delete_user
+     - 删除用户
+   * - rename_user
+     - 修改用户名
+   * - get_user_info
+     - 查看用户信息
+   * - list_users
+     - 列出所有用户
+   * - change_user_groups
+     - 修改用户所属组
+   * - set_passwd
+     - 修改自己的密码
+   * - super_set_passwd
+     - 修改任何用户的密码
+   * - block
+     - 封禁用户
+   * - unblock
+     - 解除用户封禁
 
-所幸的是，CFMS 提供了一套较为全面的匹配机制，这允许用户使用复杂的匹配规则来决定特定文档是否可被请求者访问。
+用户组管理权限
+^^^^^^^^^^^^^^
 
-一个匹配规则实际上被作为一个json文本储存。它看起来如下：
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-.. code-block:: python
-   :linenos:
+   * - 权限名称
+     - 说明
+   * - list_groups
+     - 列出所有用户组
+   * - create_group
+     - 创建新用户组
+   * - delete_group
+     - 删除用户组
+   * - rename_group
+     - 重命名用户组
+   * - get_group_info
+     - 查看用户组信息
+   * - set_group_permissions
+     - 修改用户组权限
 
-   [ # 列表，并列满足 与 条件
-        {
-            "match": "any",
-            "match_groups": [ # 下级匹配组，满足 any 条件 => True
-                {
-                    "match": "any",
-                    "rights": {
-                        "match": "any",
-                        "require": ["read"]
-                    },
-                    "groups": {
-                        "match": "any",
-                        "require": ["user"]
-                    }
-                }
-            ]
-        }, 
-        {
-            "match": "all",
-            "match_groups": [
-                {
-                    "match": "any",
-                    "rights": {
-                        "match": "any",
-                        "require": []
-                    },
-                    "groups": {
-                        "match": "any",
-                        "require": []
-                    }
-                }
-            ]
-        }, 
-    ]
+访问控制权限
+^^^^^^^^^^^^
 
-有些复杂，不是吗？
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-对用户是否满足规则要求的判断由 Users 类下的 :python:`ifMatchRequirements(self, rules: list)` 进行，它接受一个列表作为要处理的规则。
-列表的各个元素都是字典，它们在匹配上是并列关系；出于技术考虑，只有当列表下每个作为元素的字典的要求被满足时该规则才会返回为 True，
-即满足与门逻辑。
+   * - 权限名称
+     - 说明
+   * - view_access_rules
+     - 查看资源的访问规则
+   * - set_access_rules
+     - 设置资源的访问规则
+   * - manage_access
+     - 管理访问权限
+   * - view_access_entries
+     - 查看访问记录
+   * - grant_access
+     - 授予访问权限
 
-:python:`ifMatchRequirements()` 将依次检查各个作为最外层列表的元素的字典（我们称之为“首级字典”）所描述的规则是否被满足。在首级字典中，即可以通过改变 "match" 的键值来
-确定匹配的规则：它接受 "any" 或 "all" 作为有效值，若出现二者以外的情况则将抛出 :python:`ValueError` 异常。
+审计与监控权限
+^^^^^^^^^^^^^^
 
-每个首级字典只接受 "match_groups"（子规则的匹配组）这个列表作为要处理的细化规则。同样地，这个列表下的元素也是字典，具有同样的 match 作为匹配模式，并（与之前不同）
-接受两个字典分别作为其 rights 和 groups 的键值。这些字典，同样地，可以使用 match 来确认匹配模式。
+.. list-table::
+   :header-rows: 1
+   :widths: 25 60
 
-若没有给定 match 的值，则将默认以 all 模式进行匹配。
+   * - 权限名称
+     - 说明
+   * - view_audit_logs
+     - 查看审计日志
+
+用户组系统
+----------
+
+用户组定义
+^^^^^^^^^^
+
+用户组（User Group）是一组权限的集合。用户通过加入用户组来获得该组的所有权限。
+
+用户组的特点：
+
+- **权限继承**：用户自动获得所属组的所有权限
+- **多组成员**：一个用户可以同时属于多个组
+- **时间控制**：组成员身份可以设置生效和过期时间
+- **动态权限**：修改组权限会立即影响所有成员
+
+默认用户组
+^^^^^^^^^^
+
+CFMS 系统包含两个默认用户组：
+
+**user 组**
+
+- **用途**：基础用户组，所有用户默认应加入
+- **默认权限**：
+  
+  - ``set_passwd`` - 修改自己的密码
+
+**sysop 组**
+
+- **用途**：系统管理员组，拥有完整的系统权限
+- **默认权限**：几乎所有系统权限（见初始化代码）
 
 .. warning::
-    注意！请不要随意添加没有设置任一所需权限和组的子匹配规则。尽管它们可能看起来是“空”的而被认为
-    应该被忽略，但在某些情况下将可能导致整个匹配规则出现意料之外的结果，并可能出现安全性问题。
 
-.. versionchanged:: 1.0.0.20230625_alpha
-   现在 :python:`ifMatchRequirements()` 仅接受 rules 作为参数。
+   不要删除默认用户组！系统的某些逻辑依赖于这些组的存在。
 
-.. versionchanged:: 1.0.0.20230628_alpha
-   现在 :python:`ifMatchRequirements()` 存在一别名为 :python:`ifMatchRules()`。
+数据库结构
+----------
 
-我们可以从相对简单的例子开始。
+users 表
+^^^^^^^^
 
-.. code-block:: python
-   :linenos:
+存储用户基本信息：
 
-   [ # 列表，并列满足 与 条件
-        {
-            "match": "any",
-            "match_groups": [ # 下级匹配组，满足 any 条件 => True
-                {
-                    "match": "any",
-                    "rights": {
-                        "match": "any",
-                        "require": ["read"]
-                    },
-                    "groups": {
-                        "match": "any",
-                        "require": []
-                    }
-                }
-            ]
-        }
-    ]
+.. list-table::
+   :header-rows: 1
+   :widths: 20 15 50
 
-以上这个示例实际上是最开始提供的示例的其中一部分。我们将它稍作改动，以便更加容易地解释功能：
+   * - 字段名
+     - 类型
+     - 说明
+   * - username
+     - VARCHAR(255)
+     - 用户名（主键）
+   * - pass_hash
+     - TEXT
+     - 密码哈希
+   * - salt
+     - TEXT
+     - 密码盐值
+   * - passwd_last_modified
+     - FLOAT
+     - 密码最后修改时间
+   * - nickname
+     - VARCHAR(255)
+     - 用户昵称
+   * - last_login
+     - FLOAT
+     - 最后登录时间
+   * - created_time
+     - FLOAT
+     - 账户创建时间
+   * - secret_key
+     - VARCHAR(32)
+     - 用户专属JWT密钥
 
-- 最外层的列表 （:python:`[]`） 容纳着一个字典（当然也可以是多个），这些字典遵循一个相同的格式。
-- 这个最外层的字典的 :python:`match` 键被设置为 "any"，这意味着它将在 "match_groups" 下给定的
-  多个规则中的任意一个被满足时返回为真。
-- 在本例中的 "match_groups" 中的列表下只有一个元素，它也是一个字典，且只能是一个字典：同样地，它
-  依然遵照它所被规定的格式被书写。
-- 在上一条所述的字典中，有两个键的内容将作为 权限 和 用户组 的匹配规则。我们仅从 "rights" 键来分析：
+groups 表
+^^^^^^^^^
 
-  1. 与之前相同，它对应的仍然是一个字典。
-  2. 它对应的字典也有具有相同功能的 "match" 键。
-  3. "require" 对应的是一个列表（至少通常是一个可迭代对象），它包含要匹配的权限。列表中的元素应该
-     只是字符串。
+存储用户组信息：
 
-上述示例将发挥以下的效用：
+.. list-table::
+   :header-rows: 1
+   :widths: 20 15 50
 
-检查目标用户是否拥有 :python:`read` 权限，或是否拥有空用户组（groups 键下的字典规定的所需用户组为空）。
+   * - 字段名
+     - 类型
+     - 说明
+   * - group_name
+     - VARCHAR(255)
+     - 组名（主键）
+   * - created_time
+     - FLOAT
+     - 创建时间
 
-如果满足任一条件，则该规则将返回为真。
+user_memberships 表
+^^^^^^^^^^^^^^^^^^^
 
-内部逻辑上，函数将把一个空的列表返回为真。同时，函数也将视 user 用户组为所有人拥有。
+存储用户与组的关系：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 15 50
+
+   * - 字段名
+     - 类型
+     - 说明
+   * - id
+     - INTEGER
+     - 主键
+   * - username
+     - VARCHAR(255)
+     - 用户名（外键）
+   * - group_name
+     - VARCHAR(255)
+     - 组名（外键）
+   * - start_time
+     - FLOAT
+     - 生效时间（NULL表示立即）
+   * - end_time
+     - FLOAT
+     - 过期时间（NULL表示永不过期）
+
+user_permissions 表
+^^^^^^^^^^^^^^^^^^^
+
+存储用户和组的权限：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 20 15 50
+
+   * - 字段名
+     - 类型
+     - 说明
+   * - id
+     - INTEGER
+     - 主键
+   * - username
+     - VARCHAR(255)
+     - 用户名（可选，用户权限）
+   * - group_name
+     - VARCHAR(255)
+     - 组名（可选，组权限）
+   * - permission
+     - VARCHAR(255)
+     - 权限名称
+   * - start_time
+     - FLOAT
+     - 生效时间
+   * - end_time
+     - FLOAT
+     - 过期时间
 
 .. note::
 
-    在过去的版本中曾经存在 :python:`user.hasGroups()` 和 :python:`user.hasRights()` 等函数用以
-    执行判断，但这类函数已被移除。应当使用形同 :python:`x in user.rights` 的语法进行替代。
+   每条记录要么属于用户（username 非空），要么属于组（group_name 非空），不能同时为空或同时非空。
 
-因此，groups 字典 require 的空列表将在检查时被返回为真，即无论 match 为 any 或 all 时都将返回为真。
+权限检查机制
+------------
 
-为了避免因不设置 groups 而导致有内容的 rights 规则在 any 模式下被忽略（以及不设置 rights 而导致有
-内容的 groups 规则被忽略）的情况，函数将在仅设置 rights 和 groups 中的其中之一时将匹配模式调整为 all。
+权限获取流程
+^^^^^^^^^^^^
 
-路径权限的匹配规则与附加权限的继承
----------------------------------------------
+当系统需要检查用户权限时：
 
-CFMS 的伪路径同样具有权限的继承关系，并且为了灵活地设置而拥有一套较为复杂的机制。
+1. **获取直接权限**：查询 ``user_permissions`` 表中该用户的所有有效权限
+2. **获取组权限**：查询用户所属的所有有效组
+3. **获取组的权限**：查询这些组在 ``user_permissions`` 表中的权限
+4. **合并权限**：将直接权限和组权限合并，去重
 
-在开始加以阐释之前，我们对继承原则做如下的规定：
+时间检查
+^^^^^^^^
 
-1. 下层路径可以继承上层路径的权限匹配规则，同样的，也可以继承其附加的权限；
-2. 上层路径可以选择默认使下级目录不继承该目录的设置；
-3. 下层路径在本层级的程度上也可以设置为不继承上层目录的设置；
-4. 下层路径的设置服从上层路径的规则设置。例如，如果下层路径选择继承上层路径在某个方面的匹配规则，但上层路径
-   的匹配规则字典中的 __subinherit__ 被显式地设置为 :python:`False`，则下层路径最终不会检查请求该特定操作
-   的用户是否满足上层规则中所要求的条件（这被实现为在检查上层规则时直接返回 True）。
-5. 如果一个目录或文件没有其上级目录（对于一个文件来说，它的上级目录是指它所在的目录，“没有它所在的目录”即代表
-   它存在于根目录），我们认为它的上级目录是根目录；
-6. 在匹配规则字典中的 "__noinherit__" 键中，存储着不继承上层设置的操作名称。有数个名称被特别设置：
-   
-   1. "all" - 表示所有的操作；
-   2. "deny" - 表示所有的 deny 规则；
-   3. "deny\_" - 表示对于特定操作的 deny 规则。
+对于带有时间限制的权限和组成员身份：
 
-我们将通过几个例子来加以阐释。
+- **生效时间**：``start_time`` 为 ``NULL`` 或 ``0`` 表示立即生效，否则在指定时间后生效
+- **过期时间**：``end_time`` 为 ``NULL`` 表示永不过期，否则在指定时间后失效
+- **当前有效**：``start_time <= 当前时间`` 且 ``(end_time is NULL or end_time >= 当前时间)``
 
-假设我们有用户 A 请求读取在目录 `/example/documents/personal/` 下的文件 `a.txt`。这是一个伪路径，我们在此省去
-获知伪路径对应的文件（目录）id 的过程，假设这个文件的 id 为 `8fede3`；用户 A 的客户端向服务端请求 `8fede3`。
+权限检查示例
+^^^^^^^^^^^^
 
-服务端在收到请求后将做如下的处理：
+检查用户是否有 ``create_document`` 权限：
 
-1. 获取id为 `8fede3` 的文件在数据库中的记录。如果该id并不存在，则服务器将返回响应码 404；
-2. 创建一个用户 A 的 `Users` 类对象。通常而言，若请求所附带的 token 能够通过验证，则这个用户应当存在；
-3. 调用 :python:`verifyUserAccess()` 函数，并将所请求文件的id、请求对文件的操作、用户对象传入其中。接下来的操作
-   交给该函数处理：
-   
-   1. 判断函数是否由下级目录的同一函数调用（ `_subcall` 是否为真）。在此处，它显然为伪；
-   2. 读取文件 `8fede3` 所记录的权限匹配规则（ `access_rules` ），以及其附加权限规则（ `external_access` ）；
-   3. 检查该文件是否有上级目录。如果没有，则意味着该文件在根目录下；
-   4. 检查用户所请求的操作是否继承上层目录的设置。对于有上级目录的文件而言，:python:`verifyUserAccess()` 将进行
-      一次自我调用，将该父级目录的 id 传给该函数；如果其没有上级目录（即其上级目录为根目录），则判断策略 
-      `permission_on_rootdir` 中的 `inherit_by_subdirectory` 是否为真。如果为真，则检查用户是否满足根目录的规则要求；
-   5. 当在上述自我调用过程中的任何一步中不满足匹配规则的要求时，则该步所在的函数将返回为 False。调用该函数的函数在收
-      到该返回值后，也将返回为 False, 直到其回到最初被调用的一级函数为止。但该级函数同样会在收到 False 的结果后返回为
-      False。
+.. code-block:: python
 
-4. 根据 :python:`verifyUserAccess()` 的结果返回相应的应答。
+   with Session() as session:
+       user = session.get(User, username)
+       if "create_document" in user.all_permissions:
+           # 用户有该权限
+           pass
+       else:
+           # 用户没有该权限
+           pass
 
-在第三步中，若对父级规则的判断为真，则该级函数将继续对用户是否满足规则的判断。这一过程实际如下：
+``user.all_permissions`` 属性自动返回用户的所有有效权限（包括直接权限和组权限）。
 
-1. 判断用户是否满足 deny 所描述的规则，或属于其记录的用户和用户组。如果是，则将直接返回为伪；
-2. 在上述判断不为真的情况下，判断用户是否满足 access_rules 中以操作名称为键名的键下所描述的规则。对于这一判断过程，
-   请参见 :ref:`match_rules`；
-3. 如果不满足，则检查用户及用户所在的组是否在 external_access 下有对应操作的记载（意味着其被授予了执行此种操作的权限）；
-4. 如果上述两项都不符合，则返回为 False。
+用户组管理
+----------
 
+创建用户组
+^^^^^^^^^^
 
+.. code-block:: python
+
+   from include.util.group import create_group
+
+   create_group(
+       group_name="editors",
+       permissions=[
+           {"permission": "create_document"},
+           {"permission": "rename_document"},
+           {"permission": "delete_document", "end_time": 1704067200},
+       ],
+   )
+
+修改用户组权限
+^^^^^^^^^^^^^^
+
+通过 ``change_group_permissions`` API 修改：
+
+.. code-block:: json
+
+   {
+       "action": "change_group_permissions",
+       "data": {
+           "group_name": "editors",
+           "permissions": [
+               {
+                   "permission": "create_document",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+将用户加入组
+^^^^^^^^^^^^
+
+通过 ``change_user_groups`` API：
+
+.. code-block:: json
+
+   {
+       "action": "change_user_groups",
+       "data": {
+           "target_username": "user1",
+           "groups": [
+               {
+                   "group_name": "editors",
+                   "start_time": 0,
+                   "end_time": null
+               },
+               {
+                   "group_name": "user",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+授予直接权限
+^^^^^^^^^^^^
+
+可以通过数据库直接操作（未来可能提供 API）：
+
+.. code-block:: python
+
+   from include.database.models.classic import UserPermission
+   from include.database.handler import Session
+
+   with Session() as session:
+       perm = UserPermission(
+           username="user1",
+           permission="special_permission",
+           start_time=0,
+           end_time=None
+       )
+       session.add(perm)
+       session.commit()
+
+权限设计最佳实践
+----------------
+
+1. **最小权限原则**
+
+   只授予用户完成工作所需的最小权限集。
+
+2. **使用用户组**
+
+   通过用户组管理权限，而不是为每个用户单独配置。这样更易于维护。
+
+3. **定期审查**
+
+   定期检查用户权限，撤销不再需要的权限。
+
+4. **使用时间限制**
+
+   对临时权限设置过期时间，避免权限过度积累。
+
+5. **分离职责**
+
+   不同职责的操作使用不同的权限，避免权限过于宽泛。
+
+6. **文档化权限**
+
+   记录每个权限的用途和授予理由。
+
+7. **监控权限使用**
+
+   通过审计日志监控敏感权限的使用情况。
+
+常见场景
+--------
+
+场景1：普通用户
+^^^^^^^^^^^^^^^
+
+**需求**：可以创建和管理自己的文档，但不能管理其他用户或系统。
+
+**配置**：
+
+- 加入 ``user`` 组（基础权限）
+- 在特定目录上授予读写权限（通过访问控制系统）
+
+场景2：文档管理员
+^^^^^^^^^^^^^^^^^
+
+**需求**：可以管理所有文档，但不能管理用户。
+
+**配置**：
+
+创建 ``doc_admin`` 组，包含权限：
+
+- ``super_create_document``
+- ``super_list_directory``
+- ``delete_document``
+- ``rename_document``
+- ``move``
+- ``view_access_rules``
+- ``set_access_rules``
+
+场景3：系统管理员
+^^^^^^^^^^^^^^^^^
+
+**需求**：完全的系统控制权。
+
+**配置**：
+
+加入 ``sysop`` 组（包含所有系统权限）。
+
+场景4：临时权限
+^^^^^^^^^^^^^^^
+
+**需求**：临时授予用户某个权限，1个月后自动撤销。
+
+**配置**：
+
+.. code-block:: python
+
+   import time
+
+   one_month_later = time.time() + 30 * 24 * 3600
+
+   # 通过 API 或直接数据库操作
+   {
+       "permission": "delete_document",
+       "start_time": 0,
+       "end_time": one_month_later
+   }
+
+故障排除
+--------
+
+用户没有预期的权限
+^^^^^^^^^^^^^^^^^^
+
+检查清单：
+
+1. 确认用户所属的组
+2. 检查组的权限配置
+3. 检查权限的生效和过期时间
+4. 确认用户的直接权限
+5. 查看审计日志确认权限修改历史
+
+权限修改不生效
+^^^^^^^^^^^^^^
+
+- 确认已提交数据库更改（``session.commit()``）
+- 刷新用户令牌（权限在令牌生成时计算）
+- 检查是否有缓存影响
+
+无法删除用户组
+^^^^^^^^^^^^^^
+
+- 确认组不是默认组（``user`` 或 ``sysop``）
+- 检查是否有用户仍属于该组
+- 确认有 ``delete_group`` 权限
+
+相关文档
+--------
+
+- :doc:`access_control` - 访问控制系统详解
+- :doc:`api_refs` - 权限相关 API 接口
+- :doc:`database` - 数据库模型详解
+- :doc:`audit` - 审计日志系统

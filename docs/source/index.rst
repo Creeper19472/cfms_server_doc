@@ -2,29 +2,49 @@
 ===================================
 
 **CFMS** (Classified File Management System) 是用于分类化管理多密级文档的一整套系统。
-本开发手册将系统介绍有关CFMS的相关技术性用法。
+本开发手册将系统介绍有关 CFMS 服务端的技术架构、API 接口和使用方法。
 
-CFMS 是自由软件，不做任何保证：在特定的条件下，任何人均可自由修改和再分发本软件，并享有其他多种自由。
-请查阅本项目的许可证以获取更多信息。
+CFMS 是自由软件，采用 Apache 2.0 许可证发布。在特定的条件下，任何人均可自由修改和再分发本软件。
+请查阅项目的 LICENSE 文件以获取完整的许可证信息。
 
 .. warning::
 
-   本文档已过时。仍在早期开发阶段。每一个新版本都可能发生大的改动；因此，本文档或不能及时反映最新版本的特性，甚至在某些时候造成误导。
+   CFMS 目前处于 Alpha 开发阶段，正在积极开发中。系统的安全性和稳定性尚未经过充分测试，
+   不应在生产环境中使用。API 和数据结构可能在版本之间发生重大变化。
 
 内容
 --------
 
 .. toctree::
-   欢迎 <self>
+   :maxdepth: 2
+   :caption: 入门指南
 
+   欢迎 <self>
    在开始之前 <before_we_begin>
    安装与配置 <setup>
    配置文件 <config>
-   请求与响应规范 <api>
-   请求类型参考 <api_refs>
+
+.. toctree::
+   :maxdepth: 2
+   :caption: API 文档
+
+   WebSocket 通信协议 <api>
+   API 接口参考 <api_refs>
+
+.. toctree::
+   :maxdepth: 2
+   :caption: 高级主题
 
    权限与用户组 <groups_and_rights>
-   策略 <policies>
+   访问控制系统 <access_control>
+   数据库模型 <database>
+   文件管理 <file_management>
+   安全特性 <security>
+   审计日志 <audit>
 
-   未来要做的事 <todo>
+.. toctree::
+   :maxdepth: 1
+   :caption: 其他
+
+   开发计划 <todo>
 
