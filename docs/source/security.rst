@@ -35,6 +35,10 @@ CFMS 使用 WSS（WebSocket Secure）协议，所有通信都经过 TLS/SSL 加�
 
 可以使用 Let's Encrypt 等免费 CA。
 
+.. tip::
+
+   对于内部部署或测试环境，可以使用 :doc:`certtools` 生成自定义的证书颁发机构和 SSL 证书。
+
 证书验证
 ^^^^^^^^
 
@@ -490,6 +494,7 @@ SQL 注入防护
 相关文档
 --------
 
+- :doc:`certtools` - 证书生成工具
 - :doc:`config` - 安全相关配置
 - :doc:`groups_and_rights` - 权限系统
 - :doc:`access_control` - 访问控制
