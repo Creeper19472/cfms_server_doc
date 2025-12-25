@@ -10,7 +10,7 @@ API 接口参考
 接口概览
 --------
 
-CFMS API 按功能分为以下几类，共计约 40 个接口：
+CFMS API 按功能分为以下几类，共计 49 个接口：
 
 .. list-table:: API 分类
    :header-rows: 1
@@ -20,17 +20,23 @@ CFMS API 按功能分为以下几类，共计约 40 个接口：
      - 接口数量
      - 说明
    * - 服务器与认证
-     - 3
-     - 服务器信息、用户登录、令牌刷新
+     - 4
+     - 服务器信息、监听注册、用户登录、令牌刷新
+   * - 两步验证
+     - 5
+     - TOTP 两步验证的设置、验证、禁用和状态查询
    * - 文档管理
-     - 8
+     - 9
      - 文档的增删改查和权限管理
    * - 目录管理
      - 8
      - 目录的增删改查和权限管理
+   * - 文件传输
+     - 2
+     - 文件上传和下载任务管理
    * - 用户管理
-     - 9
-     - 用户账户的创建、删除、修改和查询
+     - 11
+     - 用户账户的创建、删除、修改、查询和头像管理
    * - 用户组管理
      - 6
      - 用户组的创建、删除和权限配置
@@ -38,8 +44,8 @@ CFMS API 按功能分为以下几类，共计约 40 个接口：
      - 2
      - 授予访问权限和查看访问记录
    * - 系统管理
-     - 2
-     - 锁定模式和审计日志
+     - 3
+     - 锁定模式、审计日志和服务器关闭
 
 通用规范
 --------
@@ -112,17 +118,24 @@ login - 用户登录
 
 .. list-table::
    :header-rows: 1
-   :widths: 15 10 50
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
    * - username
      - String
+     - 是
      - 用户名，长度至少 1
    * - password
      - String
+     - 是
      - 密码，长度至少 1
+   * - 2fa_token
+     - String
+     - 否
+     - 两步验证令牌（TOTP 代码），启用 2FA 的用户必需
 
 **请求示例**：
 
@@ -165,8 +178,23 @@ login - 用户登录
 **错误响应**：
 
 - ``400``: 缺少用户名或密码
-- ``401``: 用户名或密码错误
+- ``401``: 用户名或密码错误，或两步验证令牌无效
+- ``202``: 需要两步验证（用户已启用 2FA）
 - ``403``: 密码已过期或不符合要求，需要修改
+
+**两步验证响应示例**：
+
+当用户启用了两步验证但未提供 2FA 令牌时：
+
+.. code-block:: json
+
+   {
+       "code": 202,
+       "message": "Two-factor authentication required",
+       "data": {
+           "method": "totp"
+       }
+   }
 
 refresh_token - 刷新令牌
 -------------------------
@@ -234,6 +262,282 @@ register_listener - 注册监听连接
 .. note::
 
    监听连接不应主动发送其他请求，仅用于接收服务器推送的消息。
+
+=======================
+两步验证 API (2FA/TOTP)
+=======================
+
+CFMS 支持基于 TOTP (Time-based One-Time Password) 的两步验证，为用户账户提供额外的安全保护。
+
+setup_2fa - 设置两步验证
+-------------------------
+
+为当前用户设置两步验证（TOTP）。生成 TOTP 密钥和备份码。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 10 50
+
+   * - 字段
+     - 类型
+     - 必需
+     - 说明
+   * - method
+     - String
+     - 否
+     - 两步验证方法，目前仅支持 ``"totp"``
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "setup_2fa",
+       "data": {
+           "method": "totp"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication setup initiated. Please verify with your authenticator app.",
+       "data": {
+           "secret": "JBSWY3DPEHPK3PXP",
+           "provisioning_uri": "otpauth://totp/CFMS:user1?secret=JBSWY3DPEHPK3PXP&issuer=CFMS",
+           "backup_codes": [
+               "12345678",
+               "87654321",
+               "11223344"
+           ]
+       }
+   }
+
+**字段说明**：
+
+- ``secret``: TOTP 密钥，可用于手动输入到验证器应用
+- ``provisioning_uri``: 供应 URI，可生成二维码供验证器应用扫描
+- ``backup_codes``: 备份码列表，用于在无法使用验证器时恢复账户
+
+**错误响应**：
+
+- ``400``: 两步验证已启用
+- ``404``: 用户不存在
+
+.. warning::
+
+   设置完成后必须调用 ``validate_2fa`` 进行验证才能启用两步验证。
+   请妥善保存备份码，在丢失验证器设备时需要使用它们。
+
+validate_2fa - 验证并启用两步验证
+----------------------------------
+
+验证 TOTP 配置并启用两步验证。用户必须提供验证器应用生成的 6 位数字代码。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 10 50
+
+   * - 字段
+     - 类型
+     - 必需
+     - 说明
+   * - token
+     - String
+     - 是
+     - 验证器应用生成的 6 位 TOTP 代码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "validate_2fa",
+       "data": {
+           "token": "123456"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication enabled successfully",
+       "data": {
+           "method": "totp"
+       }
+   }
+
+**错误响应**：
+
+- ``400``: 两步验证未设置或已启用
+- ``401``: 验证码无效
+- ``404``: 用户不存在
+
+cancel_2fa_setup - 取消两步验证设置
+-----------------------------------
+
+取消尚未完成验证的两步验证设置。移除已生成但未验证的 TOTP 配置。
+
+**认证要求**：是
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "cancel_2fa_setup",
+       "data": {},
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication setup cancelled",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``400``: 没有待验证的两步验证设置
+- ``404``: 用户不存在
+
+disable_2fa - 禁用两步验证
+---------------------------
+
+禁用并移除用户的两步验证配置。需要提供密码进行身份验证。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 10 50
+
+   * - 字段
+     - 类型
+     - 必需
+     - 说明
+   * - password
+     - String
+     - 是
+     - 用户当前密码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "disable_2fa",
+       "data": {
+           "password": "your_password"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication disabled successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``400``: 两步验证未启用
+- ``401``: 密码错误
+- ``404``: 用户不存在
+
+.. danger::
+
+   禁用两步验证会降低账户的安全性。请确保在安全的环境中操作。
+
+get_2fa_status - 获取两步验证状态
+----------------------------------
+
+查询指定用户的两步验证状态。
+
+**认证要求**：是
+
+**所需权限**：``manage_2fa``（查询他人状态时）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 10 50
+
+   * - 字段
+     - 类型
+     - 必需
+     - 说明
+   * - target
+     - String
+     - 否
+     - 目标用户名。不提供时查询自己的状态
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_2fa_status",
+       "data": {
+           "target": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication status retrieved successfully",
+       "data": {
+           "enabled": true,
+           "method": "totp"
+       }
+   }
+
+**字段说明**：
+
+- ``enabled``: 是否已启用两步验证
+- ``method``: 两步验证方法（``"totp"`` 或 ``null``）
+
+**错误响应**：
+
+- ``403``: 权限不足（查询他人状态时）
+- ``404``: 用户不存在
 
 ===================
 文档管理 API
@@ -825,29 +1129,62 @@ delete_user - 删除用户
      - String
      - 要删除的用户名
 
-rename_user - 重命名用户
+rename_user - 修改用户昵称
 -------------------------
 
-修改用户的用户名。
+修改用户的显示昵称（nickname）。
 
 **认证要求**：是
 
-**所需权限**：``rename_user``
+**所需权限**：``rename_user``（修改他人）或无需权限（修改自己）
 
 **请求数据**：
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - old_username
+   * - username
      - String
-     - 当前用户名
-   * - new_username
-     - String
-     - 新用户名
+     - 是
+     - 要修改的用户名
+   * - nickname
+     - String/null
+     - 是
+     - 新昵称，null 表示清除昵称
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_user",
+       "data": {
+           "username": "user1",
+           "nickname": "新昵称"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User renamed successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户不存在
 
 get_user_info - 获取用户信息
 ----------------------------
@@ -862,13 +1199,29 @@ get_user_info - 获取用户信息
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - target_username
+   * - username
      - String
+     - 是
      - 目标用户名
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_user_info",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -887,6 +1240,11 @@ get_user_info - 获取用户信息
        }
    }
 
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
 change_user_groups - 修改用户组
 -------------------------------
 
@@ -900,36 +1258,56 @@ change_user_groups - 修改用户组
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - target_username
+   * - username
      - String
+     - 是
      - 目标用户名
    * - groups
      - Array
-     - 用户组配置数组
+     - 是
+     - 用户组名称数组（字符串列表）
 
-**组配置格式**：
+**请求示例**：
 
 .. code-block:: json
 
    {
-       "group_name": "sysop",
-       "start_time": 0,
-       "end_time": null
+       "action": "change_user_groups",
+       "data": {
+           "username": "user1",
+           "groups": ["user", "editors"]
+       },
+       "username": "admin",
+       "token": "your_token"
    }
 
-- ``start_time``: 生效时间（Unix 时间戳），0 或 null 表示立即生效
-- ``end_time``: 过期时间（Unix 时间戳），null 表示永不过期
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User groups changed successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户或用户组不存在
 
 set_passwd - 修改密码
 ----------------------
 
 修改用户密码。
 
-**认证要求**：是
+**认证要求**：是（修改他人时）或否（修改自己且无需认证）
 
 **所需权限**：``set_passwd``（修改自己）或 ``super_set_passwd``（修改他人）
 
@@ -937,24 +1315,189 @@ set_passwd - 修改密码
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - target_username
+   * - username
      - String
+     - 是
      - 要修改密码的用户名
-   * - old_password
+   * - old_passwd
+     - String/null
+     - 条件
+     - 当前密码（修改自己时必需，修改他人时可选）
+   * - new_passwd
      - String
-     - 当前密码（修改自己时必需）
-   * - new_password
-     - String
+     - 是
      - 新密码
+   * - force_update_after_login
+     - Boolean
+     - 否
+     - 是否要求用户下次登录时必须修改密码（默认 false）
+   * - bypass_passwd_requirements
+     - Boolean
+     - 否
+     - 是否跳过密码复杂度要求（需要 super_set_passwd 权限，默认 false）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_passwd",
+       "data": {
+           "username": "user1",
+           "old_passwd": "old_password",
+           "new_passwd": "new_secure_password"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Password changed successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``400``: 新密码不符合安全要求
+- ``401``: 旧密码错误或认证失败
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+get_user_avatar - 获取用户头像
+------------------------------
+
+获取指定用户的头像文件 ID。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 10 50
+
+   * - 字段
+     - 类型
+     - 必需
+     - 说明
+   * - username
+     - String
+     - 是
+     - 目标用户名
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_user_avatar",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User avatar retrieved successfully",
+       "data": {
+           "avatar_id": "doc_avatar_123"
+       }
+   }
+
+**字段说明**：
+
+- ``avatar_id``: 头像文档 ID，可以是 null（未设置头像时）
+
+**错误响应**：
+
+- ``404``: 用户不存在
+
+.. note::
+
+   用户登录成功时，响应中已包含 avatar_id，通常无需单独调用此接口。
+
+set_user_avatar - 设置用户头像
+-------------------------------
+
+为用户设置头像。头像必须是系统中已存在的文档。
+
+**认证要求**：是
+
+**所需权限**：``super_set_user_avatar``（设置他人头像）或无需权限（设置自己）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 10 50
+
+   * - 字段
+     - 类型
+     - 必需
+     - 说明
+   * - username
+     - String
+     - 是
+     - 目标用户名
+   * - document_id
+     - String
+     - 是
+     - 头像文档 ID（必须是有效的文档 ID）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_user_avatar",
+       "data": {
+           "username": "user1",
+           "document_id": "avatar_image_001"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User avatar set successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户或文档不存在
+
+.. warning::
+
+   头像文档必须是图片文件，且用户必须有读取该文档的权限。
 
 block_user - 封禁用户
 ----------------------
 
-封禁用户账户。
+对用户施加访问封禁。可以封禁用户访问整个系统、特定目录或特定文档。
 
 **认证要求**：是
 
@@ -964,24 +1507,103 @@ block_user - 封禁用户
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - target_username
+   * - username
      - String
+     - 是
      - 要封禁的用户名
+   * - target
+     - Object
+     - 是
+     - 封禁目标配置
+   * - block_types
+     - Array
+     - 是
+     - 封禁类型列表（如 ["read", "write"]）
    * - reason
      - String
-     - 封禁原因（可选）
+     - 否
+     - 封禁原因
    * - end_time
-     - Float
+     - Float/null
+     - 否
      - 解封时间（Unix 时间戳），null 表示永久封禁
+
+**封禁目标配置**：
+
+.. code-block:: json
+
+   {
+       "type": "all",         // 或 "directory" 或 "document"
+       "id": "target_id"      // type 为 "directory" 或 "document" 时必需
+   }
+
+**完整请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "block_user",
+       "data": {
+           "username": "user1",
+           "target": {
+               "type": "all"
+           },
+           "block_types": ["read", "write"],
+           "reason": "违反使用条款",
+           "end_time": 1700000000.0
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User blocked successfully",
+       "data": {
+           "block_id": "block_abc123"
+       }
+   }
+
+**字段说明**：
+
+- ``block_id``: 封禁记录 ID，用于后续解封操作
+
+**封禁类型**：
+
+- ``read``: 禁止读取
+- ``write``: 禁止写入
+- ``delete``: 禁止删除
+- ``manage``: 禁止管理（设置权限等）
+
+**目标类型**：
+
+- ``all``: 封禁对整个系统的访问
+- ``directory``: 封禁对特定目录的访问
+- ``document``: 封禁对特定文档的访问
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户、目录或文档不存在
+
+.. danger::
+
+   封禁整个系统访问 (``type: "all"``) 会阻止用户执行除登录外的所有操作！
 
 unblock_user - 解封用户
 ------------------------
 
-解除用户封禁。
+解除用户的访问封禁。
 
 **认证要求**：是
 
@@ -991,13 +1613,44 @@ unblock_user - 解封用户
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - target_username
+   * - block_id
      - String
-     - 要解封的用户名
+     - 是
+     - 封禁记录 ID（由 block_user 返回）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "unblock_user",
+       "data": {
+           "block_id": "block_abc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User unblocked successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 封禁记录不存在
 
 ===================
 用户组管理 API
@@ -1285,12 +1938,15 @@ lockdown - 锁定系统
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - enable
+   * - status
      - Boolean
+     - 是
      - true 启用锁定，false 禁用锁定
 
 **请求示例**：
@@ -1300,25 +1956,49 @@ lockdown - 锁定系统
    {
        "action": "lockdown",
        "data": {
-           "enable": true
+           "status": true
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Lockdown mode enabled",
+       "data": {}
+   }
+
 **锁定模式白名单**：
+
+锁定模式下，以下操作对所有用户可用：
 
 - server_info
 - register_listener
 - login
 - refresh_token
+- validate_2fa
 - upload_file
 - download_file
+
+拥有 ``bypass_lockdown`` 权限的用户不受锁定模式限制。
+
+**错误响应**：
+
+- ``401``: 认证失败
+- ``403``: 权限不足
+
+.. warning::
+
+   启用锁定模式会限制大部分用户操作，仅应在紧急情况下使用。
 
 view_audit_logs - 查看审计日志
 -------------------------------
 
-查看系统审计日志。
+查看系统审计日志。支持分页和过滤功能。
 
 **认证要求**：是
 
@@ -1328,16 +2008,39 @@ view_audit_logs - 查看审计日志
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - limit
-     - Integer
-     - 返回记录数量限制（可选，默认 100）
    * - offset
      - Integer
-     - 偏移量，用于分页（可选，默认 0）
+     - 否
+     - 偏移量，用于分页（默认 0，最小 0）
+   * - count
+     - Integer
+     - 否
+     - 返回记录数量（默认 50，最小 0，最大 100）
+   * - filters
+     - Array
+     - 否
+     - 操作类型过滤器（字符串数组），仅返回指定操作的日志
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "view_audit_logs",
+       "data": {
+           "offset": 0,
+           "count": 20,
+           "filters": ["login", "logout", "create_user"]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -1355,12 +2058,45 @@ view_audit_logs - 查看审计日志
                    "result": 200,
                    "target": "admin",
                    "remote_address": "127.0.0.1",
-                   "timestamp": 1699999999.0
+                   "logged_time": 1699999999.0
+               },
+               {
+                   "id": 2,
+                   "action": "create_user",
+                   "username": "admin",
+                   "result": 200,
+                   "target": "newuser",
+                   "remote_address": "127.0.0.1",
+                   "logged_time": 1700000000.0
                }
            ],
-           "total": 1000
+           "total": 1000,
+           "offset": 0,
+           "count": 20
        }
    }
+
+**字段说明**：
+
+- ``logs``: 审计日志条目数组
+- ``total``: 符合条件的日志总数
+- ``offset``: 当前偏移量
+- ``count``: 实际返回的记录数
+
+**日志条目字段**：
+
+- ``id``: 日志记录 ID
+- ``action``: 执行的操作名称
+- ``username``: 执行操作的用户名（可能为 null）
+- ``result``: 操作结果代码（HTTP 状态码）
+- ``target``: 操作目标（如用户名、文档 ID 等）
+- ``remote_address``: 客户端 IP 地址
+- ``logged_time``: 日志记录时间（Unix 时间戳）
+
+**错误响应**：
+
+- ``401``: 认证失败
+- ``403``: 权限不足
 
 ===================
 文件传输 API

@@ -183,6 +183,9 @@ CFMS 使用 HTTP 风格的状态码：
    * - 200
      - OK
      - 请求成功
+   * - 202
+     - Accepted
+     - 请求被接受但需要额外操作（如两步验证）
 
 客户端错误 (4xx)
 ^^^^^^^^^^^^^^^^
@@ -423,6 +426,7 @@ CFMS 通过特殊的任务机制处理文件上传和下载。
 - register_listener
 - login
 - refresh_token
+- validate_2fa
 - upload_file
 - download_file
 
