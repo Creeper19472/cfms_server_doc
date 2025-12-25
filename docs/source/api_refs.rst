@@ -607,7 +607,7 @@ list_directory - 列出目录内容
 create_document - 创建文档
 --------------------------
 
-在指定目录下创建新文档。
+在指定目录下创建新文档。文档 ID 将自动生成。
 
 **认证要求**：是
 
@@ -617,19 +617,24 @@ create_document - 创建文档
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - document_id
-     - String
-     - 文档 ID（唯一标识符）
    * - title
      - String
-     - 文档标题
+     - 是
+     - 文档标题（至少 1 个字符）
    * - folder_id
-     - String
-     - 所属目录 ID，"root" 表示根目录
+     - String/null
+     - 否
+     - 所属目录 ID，null 或不提供表示根目录
+   * - access_rules
+     - Object
+     - 否
+     - 访问规则配置（可选）
 
 **请求示例**：
 
@@ -638,9 +643,8 @@ create_document - 创建文档
    {
        "action": "create_document",
        "data": {
-           "document_id": "my_doc",
            "title": "My Document",
-           "folder_id": "root"
+           "folder_id": "folder123"
        },
        "username": "admin",
        "token": "your_token"
@@ -654,15 +658,19 @@ create_document - 创建文档
        "code": 200,
        "message": "Document created successfully",
        "data": {
-           "document_id": "my_doc"
+           "document_id": "auto_generated_id_123"
        }
    }
+
+**字段说明**：
+
+- ``document_id``: 服务器自动生成的文档 ID
 
 **错误响应**：
 
 - ``400``: 缺少必需字段或字段格式错误
 - ``403``: 权限不足
-- ``409``: 文档 ID 已存在
+- ``404``: 父目录不存在
 
 get_document - 获取文档
 ------------------------
@@ -871,7 +879,7 @@ upload_document - 上传文档内容
 create_directory - 创建目录
 ----------------------------
 
-创建新目录。
+创建新目录。目录 ID 将自动生成。
 
 **认证要求**：是
 
@@ -881,19 +889,38 @@ create_directory - 创建目录
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
-   * - folder_id
-     - String
-     - 新目录的 ID
    * - name
      - String
-     - 目录名称
+     - 是
+     - 目录名称（至少 1 个字符）
    * - parent_id
-     - String
-     - 父目录 ID，"root" 表示根目录
+     - String/null
+     - 否
+     - 父目录 ID，null 或不提供表示根目录
+   * - access_rules
+     - Object
+     - 否
+     - 访问规则配置（可选）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "create_directory",
+       "data": {
+           "name": "My Folder",
+           "parent_id": "parent_folder_id"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -903,9 +930,19 @@ create_directory - 创建目录
        "code": 200,
        "message": "Directory created successfully",
        "data": {
-           "folder_id": "new_folder"
+           "folder_id": "auto_generated_folder_id_123"
        }
    }
+
+**字段说明**：
+
+- ``folder_id``: 服务器自动生成的目录 ID
+
+**错误响应**：
+
+- ``400``: 缺少必需字段或字段格式错误
+- ``403``: 权限不足
+- ``404``: 父目录不存在
 
 get_directory_info - 获取目录信息
 ---------------------------------
@@ -1047,24 +1084,41 @@ list_users - 列出所有用户
 
    {
        "code": 200,
-       "message": "Users listed successfully",
+       "message": "List of users",
        "data": {
            "users": [
                {
                    "username": "admin",
                    "nickname": "管理员",
                    "created_time": 1699999999.0,
-                   "last_login": 1700000000.0
+                   "last_login": 1700000000.0,
+                   "permissions": ["shutdown", "create_document", ...],
+                   "groups": ["sysop", "user"]
                },
                {
                    "username": "user1",
                    "nickname": "User 1",
                    "created_time": 1700000000.0,
-                   "last_login": null
+                   "last_login": null,
+                   "permissions": ["set_passwd"],
+                   "groups": ["user"]
                }
            ]
        }
    }
+
+**字段说明**：
+
+- ``username``: 用户名
+- ``nickname``: 用户昵称
+- ``created_time``: 账户创建时间（Unix 时间戳）
+- ``last_login``: 最后登录时间（Unix 时间戳），null 表示从未登录
+- ``permissions``: 用户拥有的所有权限列表
+- ``groups``: 用户所属的用户组列表
+
+**错误响应**：
+
+- ``403``: 权限不足
 
 create_user - 创建用户
 -----------------------
@@ -1079,21 +1133,62 @@ create_user - 创建用户
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
    * - username
      - String
-     - 用户名，唯一
+     - 是
+     - 用户名，至少 1 个字符，必须唯一
    * - password
      - String
+     - 是
      - 初始密码
    * - nickname
      - String
-     - 用户昵称（可选）
+     - 否
+     - 用户昵称
+   * - permissions
+     - Array
+     - 否
+     - 用户权限配置数组
+   * - groups
+     - Array
+     - 否
+     - 用户组配置数组
 
-**请求示例**：
+**权限配置格式**：
+
+.. code-block:: json
+
+   {
+       "permission": "create_document",
+       "start_time": 0,
+       "end_time": null
+   }
+
+- ``permission`` (必需): 权限名称
+- ``start_time`` (必需): 生效时间（Unix 时间戳），0 表示立即生效
+- ``end_time`` (可选): 过期时间（Unix 时间戳），null 或不提供表示永不过期
+
+**用户组配置格式**：
+
+.. code-block:: json
+
+   {
+       "group_name": "editors",
+       "start_time": 0,
+       "end_time": null
+   }
+
+- ``group_name`` (必需): 用户组名称
+- ``start_time`` (必需): 生效时间（Unix 时间戳），0 表示立即生效
+- ``end_time`` (可选): 过期时间（Unix 时间戳），null 或不提供表示永不过期
+
+**请求示例（基本）**：
 
 .. code-block:: json
 
@@ -1107,6 +1202,51 @@ create_user - 创建用户
        "username": "admin",
        "token": "your_token"
    }
+
+**请求示例（完整）**：
+
+.. code-block:: json
+
+   {
+       "action": "create_user",
+       "data": {
+           "username": "newuser",
+           "password": "secure_password",
+           "nickname": "New User",
+           "permissions": [
+               {
+                   "permission": "create_document",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ],
+           "groups": [
+               {
+                   "group_name": "user",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User created successfully",
+       "data": {}
+   }
+
+**错误响应**：
+
+- ``400``: 缺少必需字段或字段格式错误
+- ``403``: 权限不足
+- ``409``: 用户名已存在
 
 delete_user - 删除用户
 -----------------------
