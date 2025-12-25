@@ -10,7 +10,7 @@ API 接口参考
 接口概览
 --------
 
-CFMS API 按功能分为以下几类，共计约 40 个接口：
+CFMS API 按功能分为以下几类，共计 45+ 个接口：
 
 .. list-table:: API 分类
    :header-rows: 1
@@ -20,26 +20,32 @@ CFMS API 按功能分为以下几类，共计约 40 个接口：
      - 接口数量
      - 说明
    * - 服务器与认证
-     - 3
-     - 服务器信息、用户登录、令牌刷新
+     - 4
+     - 服务器信息、监听器注册、用户登录、令牌刷新
+   * - 两步验证
+     - 5
+     - TOTP 两步验证的设置、验证、禁用和状态查询
    * - 文档管理
-     - 8
-     - 文档的增删改查和权限管理
+     - 9
+     - 文档的增删改查、移动和权限管理
+   * - 文件传输
+     - 2
+     - 文件的上传和下载
    * - 目录管理
      - 8
-     - 目录的增删改查和权限管理
+     - 目录的增删改查、移动和权限管理
    * - 用户管理
-     - 9
-     - 用户账户的创建、删除、修改和查询
+     - 10
+     - 用户账户的创建、删除、修改、封禁和头像管理
    * - 用户组管理
      - 6
-     - 用户组的创建、删除和权限配置
+     - 用户组的创建、删除、重命名和权限配置
    * - 访问控制
      - 2
      - 授予访问权限和查看访问记录
    * - 系统管理
-     - 2
-     - 锁定模式和审计日志
+     - 3
+     - 服务器关闭、锁定模式和审计日志
 
 通用规范
 --------
@@ -227,13 +233,252 @@ register_listener - 注册监听连接
 
    {
        "code": 200,
-       "message": "registered as a listener",
-       "data": {}
+       "message": "Registered as a listener",
+       "data": {},
+       "protocol_version": 3
    }
 
 .. note::
 
-   监听连接不应主动发送其他请求，仅用于接收服务器推送的消息。
+   监听连接不应主动发送其他请求，仅用于接收服务器推送的消息。服务器在触发事件时会向所有已注册的监听连接广播消息。
+
+===================
+两步验证 API
+===================
+
+setup_2fa - 设置两步验证
+-------------------------
+
+为当前用户设置 TOTP（基于时间的一次性密码）两步验证。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 50
+
+   * - 字段
+     - 类型
+     - 说明
+   * - method
+     - String
+     - 可选。验证方法，目前仅支持 "totp"
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "setup_2fa",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication setup initiated. Please verify with your authenticator app.",
+       "data": {
+           "secret": "BASE32_SECRET_KEY",
+           "provisioning_uri": "otpauth://totp/CFMS:admin?secret=...",
+           "backup_codes": ["code1", "code2", ...]
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``secret``: TOTP 密钥（Base32 编码），用于手动输入
+- ``provisioning_uri``: 配置 URI，可生成 QR 码供认证器应用扫描
+- ``backup_codes``: 备份代码列表，用于在无法使用认证器时恢复访问
+
+**错误响应**：
+
+- ``400``: 两步验证已启用，需要先取消
+- ``404``: 用户不存在
+
+.. warning::
+
+   请妥善保管备份代码！如果丢失认证器且没有备份代码，将无法登录账户。
+
+validate_2fa - 验证两步验证
+---------------------------
+
+验证并启用两步验证。在设置两步验证后必须验证才能生效。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 50
+
+   * - 字段
+     - 类型
+     - 说明
+   * - token
+     - String
+     - 认证器生成的 6 位验证码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "validate_2fa",
+       "data": {
+           "token": "123456"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication enabled successfully",
+       "data": {
+           "method": "totp"
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 两步验证未设置或已启用
+- ``401``: 验证码无效
+- ``404``: 用户不存在
+
+disable_2fa - 禁用两步验证
+--------------------------
+
+禁用当前用户的两步验证。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 50
+
+   * - 字段
+     - 类型
+     - 说明
+   * - token
+     - String
+     - 认证器生成的 6 位验证码或备份代码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "disable_2fa",
+       "data": {
+           "token": "123456"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication disabled successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 两步验证未启用
+- ``401``: 验证码无效
+- ``404``: 用户不存在
+
+cancel_2fa_setup - 取消两步验证设置
+-----------------------------------
+
+取消正在进行中但尚未验证的两步验证设置。
+
+**认证要求**：是
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "cancel_2fa_setup",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication setup cancelled",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 没有待验证的两步验证设置或两步验证已启用
+- ``404``: 用户不存在
+
+get_2fa_status - 查询两步验证状态
+---------------------------------
+
+查询当前用户的两步验证状态。
+
+**认证要求**：是
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "get_2fa_status",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication status retrieved",
+       "data": {
+           "enabled": true,
+           "method": "totp"
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``enabled``: 两步验证是否已启用
+- ``method``: 验证方法（"totp" 或 null）
 
 ===================
 文档管理 API
@@ -246,7 +491,7 @@ list_directory - 列出目录内容
 
 **认证要求**：是
 
-**所需权限**：对目标目录的读取权限
+**所需权限**：对目标目录的读取权限（或 ``super_list_directory``）
 
 **请求数据**：
 
@@ -257,8 +502,8 @@ list_directory - 列出目录内容
      - 类型
      - 说明
    * - folder_id
-     - String
-     - 目录 ID，使用 "root" 表示根目录
+     - String/null
+     - 目录 ID。使用 null 表示根目录
 
 **请求示例**：
 
@@ -267,7 +512,7 @@ list_directory - 列出目录内容
    {
        "action": "list_directory",
        "data": {
-           "folder_id": "root"
+           "folder_id": null
        },
        "username": "admin",
        "token": "your_token"
@@ -279,15 +524,16 @@ list_directory - 列出目录内容
 
    {
        "code": 200,
-       "message": "Directory listed successfully",
+       "message": "Directory listing successful",
        "data": {
+           "parent_id": "/",
            "documents": [
                {
                    "id": "doc1",
                    "title": "Document 1",
-                   "size": 1024,
                    "created_time": 1699999999.0,
-                   "last_modified": 1699999999.0
+                   "last_modified": 1699999999.0,
+                   "size": 1024
                }
            ],
            "folders": [
@@ -297,17 +543,29 @@ list_directory - 列出目录内容
                    "created_time": 1699999999.0
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``parent_id``: 父目录 ID，根目录的父目录为 "/"，null 表示没有父目录
+- ``documents``: 文档列表，每个文档包含 id、title、created_time、last_modified 和 size
+- ``folders``: 子目录列表，每个目录包含 id、name 和 created_time
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 目录不存在
 
 create_document - 创建文档
 --------------------------
 
-在指定目录下创建新文档。
+在指定目录下创建新文档并返回上传任务信息。
 
 **认证要求**：是
 
-**所需权限**：``create_document`` 或 ``super_create_document``
+**所需权限**：``create_document``（或 ``super_create_document`` 忽略目录写权限）
 
 **请求数据**：
 
@@ -317,15 +575,15 @@ create_document - 创建文档
    * - 字段
      - 类型
      - 说明
-   * - document_id
-     - String
-     - 文档 ID（唯一标识符）
    * - title
      - String
-     - 文档标题
+     - 文档标题，必填
    * - folder_id
-     - String
-     - 所属目录 ID，"root" 表示根目录
+     - String/null
+     - 所属目录 ID，null 表示根目录（可选）
+   * - access_rules
+     - Object
+     - 访问规则配置（可选）
 
 **请求示例**：
 
@@ -334,9 +592,9 @@ create_document - 创建文档
    {
        "action": "create_document",
        "data": {
-           "document_id": "my_doc",
            "title": "My Document",
-           "folder_id": "root"
+           "folder_id": null,
+           "access_rules": {}
        },
        "username": "admin",
        "token": "your_token"
@@ -348,22 +606,37 @@ create_document - 创建文档
 
    {
        "code": 200,
-       "message": "Document created successfully",
+       "message": "Task successfully created",
        "data": {
-           "document_id": "my_doc"
-       }
+           "document_id": "abc123...",
+           "task_data": {
+               "task_id": "task123",
+               "start_time": 1699999999.0,
+               "end_time": 1700003599.0
+           }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``document_id``: 新创建的文档 ID
+- ``task_data``: 文件上传任务信息
+  - ``task_id``: 任务 ID，用于后续文件上传
+  - ``start_time``: 任务开始时间
+  - ``end_time``: 任务结束时间（通常为开始时间 + 1小时）
 
 **错误响应**：
 
-- ``400``: 缺少必需字段或字段格式错误
-- ``403``: 权限不足
-- ``409``: 文档 ID 已存在
+- ``400``: 缺少标题或设置访问规则失败
+- ``403``: 权限不足或无权设置访问规则
+- ``404``: 父目录不存在
+- ``409``: 文档名称冲突（当配置不允许重名时）
 
 get_document - 获取文档
 ------------------------
 
-获取文档的完整信息（不包含文件内容）。
+获取文档的基本信息并创建下载任务。
 
 **认证要求**：是
 
@@ -381,38 +654,80 @@ get_document - 获取文档
      - String
      - 文档 ID
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_document",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
 
    {
        "code": 200,
-       "message": "Document retrieved successfully",
+       "message": "Document successfully fetched",
        "data": {
-           "document_id": "my_doc",
+           "document_id": "doc123",
            "title": "My Document",
-           "folder_id": "root",
-           "created_time": 1699999999.0,
-           "revisions": [
-               {
-                   "revision_id": 1,
-                   "file_id": "file123",
-                   "created_time": 1699999999.0
-               }
-           ]
-       }
+           "task_data": {
+               "task_id": "task456",
+               "start_time": 1699999999.0,
+               "end_time": 1700003599.0
+           }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``task_data``: 文件下载任务信息，使用 ``download_file`` 接口下载文件内容
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在或文档没有活动版本
 
 get_document_info - 获取文档信息
 --------------------------------
 
-获取文档的基本信息和访问规则。
+获取文档的详细信息，包括大小、时间和访问规则。
 
 **认证要求**：是
 
 **所需权限**：对文档的读取权限
 
-**请求数据**：同 ``get_document``
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - document_id
+     - String
+     - 文档 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_document_info",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -422,30 +737,106 @@ get_document_info - 获取文档信息
        "code": 200,
        "message": "Document info retrieved successfully",
        "data": {
-           "document_id": "my_doc",
-           "parent_id": "root",
+           "document_id": "doc123",
+           "parent_id": null,
            "title": "My Document",
            "size": 2048,
            "created_time": 1699999999.0,
            "last_modified": 1700000000.0,
-           "access_rules": [],
+           "access_rules": [
+               {
+                   "rule_id": 1,
+                   "access_type": "read",
+                   "rule_data": {...}
+               }
+           ],
            "info_code": 0
-       }
+       },
+       "protocol_version": 3
    }
 
 **info_code 说明**：
 
 - ``0``: 成功获取所有信息
-- ``1``: 无权查看访问规则
+- ``1``: 无权查看访问规则（access_rules 为空）
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在或文档没有活动版本
+
+get_document_access_rules - 获取文档访问规则
+---------------------------------------------
+
+获取文档的访问规则配置，按访问类型分组。
+
+**认证要求**：是
+
+**所需权限**：对文档的读取权限且拥有 ``view_access_rules`` 权限
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - document_id
+     - String
+     - 文档 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_document_access_rules",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Document access rules retrieved successfully",
+       "data": {
+           "read": [
+               {
+                   "match": "any",
+                   "match_groups": [...]
+               }
+           ],
+           "write": [...],
+           "move": [...],
+           "manage": [...]
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+响应数据是一个字典，键为访问类型（read、write、move、manage），值为该类型的规则数据数组。
+
+**错误响应**：
+
+- ``403``: 权限不足或无权查看访问规则
+- ``404``: 文档不存在
 
 delete_document - 删除文档
 ---------------------------
 
-删除指定文档。
+删除指定文档及其所有版本。
 
 **认证要求**：是
 
-**所需权限**：``delete_document``
+**所需权限**：``delete_document`` 且对文档有写权限
 
 **请求数据**：
 
@@ -459,15 +850,35 @@ delete_document - 删除文档
      - String
      - 要删除的文档 ID
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "delete_document",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
 
    {
        "code": 200,
-       "message": "Document deleted successfully",
-       "data": {}
+       "message": "Document successfully deleted",
+       "data": {},
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在
+- ``500``: 删除失败（可能有正在进行的下载任务）
 
 rename_document - 重命名文档
 ----------------------------
@@ -476,7 +887,7 @@ rename_document - 重命名文档
 
 **认证要求**：是
 
-**所需权限**：``rename_document``
+**所需权限**：``rename_document`` 且对文档有写权限
 
 **请求数据**：
 
@@ -493,6 +904,20 @@ rename_document - 重命名文档
      - String
      - 新标题
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_document",
+       "data": {
+           "document_id": "doc123",
+           "new_title": "Updated Title"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
@@ -500,8 +925,15 @@ rename_document - 重命名文档
    {
        "code": 200,
        "message": "Document renamed successfully",
-       "data": {}
+       "data": {},
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``400``: 新标题与当前标题相同或名称冲突
+- ``403``: 权限不足
+- ``404``: 文档不存在
 
 move_document - 移动文档
 ------------------------
@@ -510,7 +942,7 @@ move_document - 移动文档
 
 **认证要求**：是
 
-**所需权限**：``move``
+**所需权限**：``move`` 且对文档有移动权限，对目标目录有写权限
 
 **请求数据**：
 
@@ -524,8 +956,22 @@ move_document - 移动文档
      - String
      - 文档 ID
    * - target_folder_id
-     - String
-     - 目标目录 ID
+     - String/null
+     - 目标目录 ID，null 表示根目录（可选，默认不移动）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "move_document",
+       "data": {
+           "document_id": "doc123",
+           "target_folder_id": "folder456"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -533,18 +979,25 @@ move_document - 移动文档
 
    {
        "code": 200,
-       "message": "Document moved successfully",
-       "data": {}
+       "message": "Success",
+       "data": {},
+       "protocol_version": 3
    }
 
-upload_document - 上传文档内容
+**错误响应**：
+
+- ``400``: 目标目录中存在同名文档或文件夹
+- ``403``: 权限不足
+- ``404``: 文档或目标目录不存在
+
+upload_document - 上传文档版本
 ------------------------------
 
-为文档创建新版本并上传文件内容。
+为已存在的文档创建新版本并返回上传任务。
 
 **认证要求**：是
 
-**所需权限**：对文档的写入权限
+**所需权限**：对文档的写权限
 
 **请求数据**：
 
@@ -558,11 +1011,208 @@ upload_document - 上传文档内容
      - String
      - 文档 ID
 
-**响应**：返回文件上传任务信息（详见文件传输部分）
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "upload_document",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Task successfully created",
+       "data": {
+           "task_data": {
+               "task_id": "task789",
+               "start_time": 1699999999.0,
+               "end_time": 1700003599.0
+           }
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``task_data``: 上传任务信息，使用 ``upload_file`` 接口上传文件内容
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在
+
+set_document_rules - 设置文档访问规则
+-------------------------------------
+
+为文档设置访问控制规则。
+
+**认证要求**：是
+
+**所需权限**：``set_access_rules`` 且对文档有管理权限
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - document_id
+     - String
+     - 文档 ID
+   * - access_rules
+     - Object
+     - 访问规则配置，键为访问类型，值为规则数组
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_document_rules",
+       "data": {
+           "document_id": "doc123",
+           "access_rules": {
+               "read": [
+                   {
+                       "match": "any",
+                       "match_groups": ["user"]
+                   }
+               ],
+               "write": []
+           }
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Set access rules successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 规则格式错误
+- ``403``: 权限不足
+- ``404``: 文档不存在
+
+.. note::
+
+   访问规则的详细格式请参考 :doc:`access_control`。
 
 ===================
-目录管理 API
+文件传输 API
 ===================
+
+download_file - 下载文件
+--------------------------
+
+通过任务 ID 下载文件。此接口需要先通过 ``get_document`` 获取任务 ID。
+
+**认证要求**：否（任务 ID 本身提供认证）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - task_id
+     - String
+     - 下载任务 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "download_file",
+       "data": {
+           "task_id": "task123"
+       },
+       "username": "",
+       "token": ""
+   }
+
+**响应**：
+
+服务器会直接通过 WebSocket 发送文件的二进制数据，不返回 JSON 响应。
+
+**错误响应**：
+
+- ``400``: 任务状态无效或任务时间无效
+- ``404``: 任务不存在
+
+.. note::
+
+   此接口是锁定模式白名单操作，即使在锁定模式下也可使用。
+   任务有效期为 1 小时，超时后需要重新创建任务。
+
+upload_file - 上传文件
+-----------------------
+
+通过任务 ID 上传文件。此接口需要先通过 ``create_document`` 或 ``upload_document`` 获取任务 ID。
+
+**认证要求**：否（任务 ID 本身提供认证）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - task_id
+     - String
+     - 上传任务 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "upload_file",
+       "data": {
+           "task_id": "task456"
+       },
+       "username": "",
+       "token": ""
+   }
+
+**响应**：
+
+服务器准备好接收文件数据后会发送确认响应，客户端应通过 WebSocket 发送文件的二进制数据。
+
+**错误响应**：
+
+- ``400``: 任务状态无效或任务时间无效
+- ``404``: 任务不存在
+
+.. note::
+
+   此接口是锁定模式白名单操作。
+   文件上传采用分块传输，默认块大小为 2MB。
+   任务有效期为 1 小时。
 
 create_directory - 创建目录
 ----------------------------
