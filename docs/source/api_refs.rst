@@ -565,7 +565,7 @@ create_document - 创建文档
 
 **认证要求**：是
 
-**所需权限**：``create_document``（或 ``super_create_document`` 忽略目录写权限）
+**所需权限**：``create_document`` （或 ``super_create_document`` 忽略目录写权限）
 
 **请求数据**：
 
@@ -1590,7 +1590,7 @@ rename_user - 修改用户昵称
 
 **认证要求**：是
 
-**所需权限**：``rename_user``（修改他人）或无需权限（修改自己）
+**所需权限**：``rename_user`` （修改他人）或无需权限（修改自己）
 
 **请求数据**：
 
@@ -1892,7 +1892,7 @@ set_user_avatar - 设置用户头像
 
 **认证要求**：是
 
-**所需权限**：``set_user_avatar``（设置他人）或无需权限（设置自己）
+**所需权限**：``set_user_avatar`` （设置他人）或无需权限（设置自己）
 
 **请求数据**：
 
@@ -2034,7 +2034,7 @@ set_passwd - 修改密码
 
 **认证要求**：是
 
-**所需权限**：``set_passwd``（修改自己）或 ``super_set_passwd``（修改他人）
+**所需权限**：``set_passwd`` （修改自己）或 ``super_set_passwd`` （修改他人）
 
 **请求数据**：
 
@@ -2161,7 +2161,7 @@ set_passwd - 修改密码
 
 **认证要求**：是
 
-**所需权限**：``set_passwd``（修改自己）或 ``super_set_passwd``（修改他人）
+**所需权限**：``set_passwd`` （修改自己）或 ``super_set_passwd`` （修改他人）
 
 **请求数据**：
 
