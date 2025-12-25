@@ -144,7 +144,7 @@ login - 用户登录
        "token": ""
    }
 
-**成功响应**：
+**成功响应（无 2FA）**：
 
 .. code-block:: json
 
@@ -157,7 +157,21 @@ login - 用户登录
            "nickname": "管理员",
            "permissions": ["shutdown", "create_document", ...],
            "groups": ["sysop", "user"]
-       }
+       },
+       "protocol_version": 3
+   }
+
+**需要 2FA 验证响应**：
+
+.. code-block:: json
+
+   {
+       "code": 202,
+       "message": "Two-factor authentication required",
+       "data": {
+           "method": "totp"
+       },
+       "protocol_version": 3
    }
 
 **字段说明**：
@@ -171,8 +185,12 @@ login - 用户登录
 **错误响应**：
 
 - ``400``: 缺少用户名或密码
-- ``401``: 用户名或密码错误
+- ``401``: 用户名或密码错误或 2FA 验证码无效
 - ``403``: 密码已过期或不符合要求，需要修改
+
+.. note::
+
+   当用户启用了两步验证时，首次登录会返回 202 状态码，需要在请求的 ``data`` 中添加 ``2fa_token`` 字段（6位验证码）重新提交登录请求。
 
 refresh_token - 刷新令牌
 -------------------------
@@ -2959,10 +2977,30 @@ shutdown - 关闭服务器
    此操作会立即关闭服务器，所有活动连接将被断开！不可撤销！
 
 
-常见错误代码
-------------
+常见状态码
+----------
 
-所有 API 可能返回的通用错误：
+所有 API 可能返回的通用状态码：
+
+成功状态码 (2xx)
+^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 30 40
+
+   * - 代码
+     - 含义
+     - 使用场景
+   * - 200
+     - OK
+     - 请求成功，返回数据
+   * - 202
+     - Accepted
+     - 请求已接受，需要额外操作（如 login 需要两步验证）
+
+错误状态码
+^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1

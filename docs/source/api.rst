@@ -183,6 +183,9 @@ CFMS 使用 HTTP 风格的状态码：
    * - 200
      - OK
      - 请求成功
+   * - 202
+     - Accepted
+     - 请求已接受，需要额外操作（如两步验证）
 
 客户端错误 (4xx)
 ^^^^^^^^^^^^^^^^
@@ -287,7 +290,7 @@ CFMS 使用 HTTP 风格的状态码：
        "token": ""
    }
 
-成功响应：
+成功响应（无 2FA）：
 
 .. code-block:: json
 
@@ -301,6 +304,33 @@ CFMS 使用 HTTP 风格的状态码：
            "permissions": ["shutdown", "create_document", ...],
            "groups": ["sysop", "user"]
        }
+   }
+
+需要 2FA 验证响应：
+
+.. code-block:: json
+
+   {
+       "code": 202,
+       "message": "Two-factor authentication required",
+       "data": {
+           "method": "totp"
+       }
+   }
+
+当收到 202 响应时，需要在登录请求的 ``data`` 中添加 ``2fa_token`` 字段（认证器生成的 6 位验证码）重新提交：
+
+.. code-block:: json
+
+   {
+       "action": "login",
+       "data": {
+           "username": "admin",
+           "password": "your_password",
+           "2fa_token": "123456"
+       },
+       "username": "",
+       "token": ""
    }
 
 失败响应：
