@@ -1370,7 +1370,7 @@ move_directory - 移动目录
 list_users - 列出所有用户
 --------------------------
 
-列出系统中的所有用户。
+列出系统中的所有用户，包括权限和组信息。
 
 **认证要求**：是
 
@@ -1393,29 +1393,43 @@ list_users - 列出所有用户
 
    {
        "code": 200,
-       "message": "Users listed successfully",
+       "message": "List of users",
        "data": {
            "users": [
                {
                    "username": "admin",
                    "nickname": "管理员",
                    "created_time": 1699999999.0,
-                   "last_login": 1700000000.0
+                   "last_login": 1700000000.0,
+                   "permissions": ["shutdown", "create_user", ...],
+                   "groups": ["sysop", "user"]
                },
                {
                    "username": "user1",
                    "nickname": "User 1",
                    "created_time": 1700000000.0,
-                   "last_login": null
+                   "last_login": null,
+                   "permissions": ["set_passwd"],
+                   "groups": ["user"]
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``permissions``: 用户拥有的所有权限列表（包括从组继承的权限）
+- ``groups``: 用户所属的用户组列表
+
+**错误响应**：
+
+- ``403``: 权限不足
 
 create_user - 创建用户
 -----------------------
 
-创建新用户账户。
+创建新用户账户，可以同时配置权限和用户组。
 
 **认证要求**：是
 
@@ -1431,13 +1445,39 @@ create_user - 创建用户
      - 说明
    * - username
      - String
-     - 用户名，唯一
+     - 用户名，唯一，必填
    * - password
      - String
-     - 初始密码
+     - 初始密码，必填
    * - nickname
      - String
      - 用户昵称（可选）
+   * - permissions
+     - Array
+     - 权限配置数组（可选）
+   * - groups
+     - Array
+     - 用户组配置数组（可选）
+
+**权限配置格式**：
+
+.. code-block:: json
+
+   {
+       "permission": "create_document",
+       "start_time": 0,
+       "end_time": null
+   }
+
+**用户组配置格式**：
+
+.. code-block:: json
+
+   {
+       "group_name": "user",
+       "start_time": 0,
+       "end_time": null
+   }
 
 **请求示例**：
 
@@ -1448,16 +1488,50 @@ create_user - 创建用户
        "data": {
            "username": "newuser",
            "password": "secure_password",
-           "nickname": "New User"
+           "nickname": "New User",
+           "permissions": [
+               {
+                   "permission": "set_passwd",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ],
+           "groups": [
+               {
+                   "group_name": "user",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User created successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 用户名已存在、权限或组格式错误、指定的组不存在
+- ``403``: 权限不足
+
+.. warning::
+
+   ``create_user`` 是一个危险权限，应仅授予管理员。
+
 delete_user - 删除用户
 -----------------------
 
-删除用户账户。
+删除用户账户及其所有相关数据。
 
 **认证要求**：是
 
@@ -1471,18 +1545,52 @@ delete_user - 删除用户
    * - 字段
      - 类型
      - 说明
-   * - target_username
+   * - username
      - String
      - 要删除的用户名
 
-rename_user - 重命名用户
--------------------------
+**请求示例**：
 
-修改用户的用户名。
+.. code-block:: json
+
+   {
+       "action": "delete_user",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User deleted successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 尝试删除自己或缺少用户名
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   删除用户会同时删除其组成员关系和封禁记录。
+
+rename_user - 修改用户昵称
+--------------------------
+
+修改用户的昵称（显示名称）。
 
 **认证要求**：是
 
-**所需权限**：``rename_user``
+**所需权限**：``rename_user``（修改他人）或无需权限（修改自己）
 
 **请求数据**：
 
@@ -1492,12 +1600,42 @@ rename_user - 重命名用户
    * - 字段
      - 类型
      - 说明
-   * - old_username
+   * - username
      - String
-     - 当前用户名
-   * - new_username
-     - String
-     - 新用户名
+     - 要修改的用户名
+   * - nickname
+     - String/null
+     - 新昵称，null 表示清空昵称
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_user",
+       "data": {
+           "username": "user1",
+           "nickname": "Updated Nickname"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User renamed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 用户不存在
+- ``403``: 权限不足（修改他人时需要权限）
 
 get_user_info - 获取用户信息
 ----------------------------
@@ -1509,6 +1647,448 @@ get_user_info - 获取用户信息
 **所需权限**：``get_user_info``
 
 **请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_user_info",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User info retrieved successfully",
+       "data": {
+           "username": "user1",
+           "nickname": "User 1",
+           "created_time": 1699999999.0,
+           "last_login": 1700000000.0,
+           "groups": ["user"],
+           "permissions": ["set_passwd"]
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+block_user - 封禁用户
+----------------------
+
+封禁用户账户，限制其对特定资源的访问。
+
+**认证要求**：是
+
+**所需权限**：``block``
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 要封禁的用户名
+   * - target
+     - Object
+     - 封禁目标配置
+   * - block_types
+     - Array
+     - 封禁类型列表（如 ["read", "write"]）
+   * - duration
+     - Number
+     - 封禁时长（秒），null 表示永久封禁
+
+**目标配置格式**：
+
+.. code-block:: json
+
+   {
+       "type": "all",  // 或 "document", "directory"
+       "id": "doc123"  // 仅当 type 不是 "all" 时需要
+   }
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "block_user",
+       "data": {
+           "username": "user1",
+           "target": {
+               "type": "document",
+               "id": "doc123"
+           },
+           "block_types": ["read", "write"],
+           "duration": 3600
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User blocked successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 参数格式错误或目标资源不存在
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   此操作每次只能添加一个封禁记录。如需添加多个封禁，应分批请求。
+
+unblock_user - 解封用户
+------------------------
+
+解除用户的封禁。
+
+**认证要求**：是
+
+**所需权限**：``unblock``
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 要解封的用户名
+   * - target
+     - Object
+     - 解封目标配置（格式同 block_user）
+   * - block_types
+     - Array
+     - 要解除的封禁类型列表
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "unblock_user",
+       "data": {
+           "username": "user1",
+           "target": {
+               "type": "document",
+               "id": "doc123"
+           },
+           "block_types": ["read"]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User unblocked successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 参数格式错误
+- ``403``: 权限不足
+- ``404``: 用户或封禁记录不存在
+
+get_user_avatar - 获取用户头像
+------------------------------
+
+获取用户的头像图片数据。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_user_avatar",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Avatar retrieved successfully",
+       "data": {
+           "avatar_data": "base64_encoded_image_data",
+           "mime_type": "image/png"
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``404``: 用户不存在或未设置头像
+
+set_user_avatar - 设置用户头像
+------------------------------
+
+设置用户的头像图片。
+
+**认证要求**：是
+
+**所需权限**：``set_user_avatar``（设置他人）或无需权限（设置自己）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+   * - avatar_data
+     - String
+     - Base64 编码的图片数据
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_user_avatar",
+       "data": {
+           "username": "user1",
+           "avatar_data": "iVBORw0KGgoAAAANSUhEUgAAAAUA..."
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Avatar set successfully",
+       "data": {
+           "avatar_id": "avatar123"
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 图片数据无效或格式不支持
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   支持的图片格式：JPEG, PNG, GIF, BMP, WebP等常见格式。
+
+change_user_groups - 修改用户组
+-------------------------------
+
+修改用户所属的用户组。
+
+**认证要求**：是
+
+**所需权限**：``change_user_groups``
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+   * - groups
+     - Array
+     - 用户组配置数组
+
+**用户组配置格式**：
+
+.. code-block:: json
+
+   {
+       "group_name": "sysop",
+       "start_time": 0,
+       "end_time": null
+   }
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "change_user_groups",
+       "data": {
+           "username": "user1",
+           "groups": [
+               {
+                   "group_name": "user",
+                   "start_time": 0,
+                   "end_time": null
+               },
+               {
+                   "group_name": "developer",
+                   "start_time": 1699999999.0,
+                   "end_time": 1700003599.0
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User groups changed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``start_time``: 生效时间（Unix 时间戳），0 或 null 表示立即生效
+- ``end_time``: 过期时间（Unix 时间戳），null 表示永不过期
+
+**错误响应**：
+
+- ``400``: 组配置格式错误或指定的组不存在
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+set_passwd - 修改密码
+----------------------
+
+修改用户密码。
+
+**认证要求**：是
+
+**所需权限**：``set_passwd``（修改自己）或 ``super_set_passwd``（修改他人）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 要修改密码的用户名
+   * - old_password
+     - String
+     - 当前密码（修改自己时必需）
+   * - new_password
+     - String
+     - 新密码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_passwd",
+       "data": {
+           "username": "user1",
+           "old_password": "current_password",
+           "new_password": "new_secure_password"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Password changed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 缺少必需字段、旧密码错误或新密码不符合要求
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   密码要求由服务器配置文件中的安全策略决定，可能包括最小长度、必须包含的字符类型等。
 
 .. list-table::
    :header-rows: 1
@@ -1939,7 +2519,7 @@ lockdown - 锁定系统
    * - 字段
      - 类型
      - 说明
-   * - enable
+   * - status
      - Boolean
      - true 启用锁定，false 禁用锁定
 
@@ -1950,25 +2530,53 @@ lockdown - 锁定系统
    {
        "action": "lockdown",
        "data": {
-           "enable": true
+           "status": true
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Success",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**副作用**：
+
+- 启用锁定模式时，所有正在进行的文件传输任务将被立即终止（end_time 被设置为当前时间）
+- 系统会向所有已注册的监听连接广播锁定状态变更消息
+
 **锁定模式白名单**：
+
+以下操作在锁定模式下仍可使用：
 
 - server_info
 - register_listener
 - login
 - refresh_token
+- validate_2fa
 - upload_file
 - download_file
+
+**错误响应**：
+
+- ``401``: 认证失败
+- ``403``: 权限不足
+
+.. warning::
+
+   启用锁定模式会终止所有正在进行的文件传输任务！
 
 view_audit_logs - 查看审计日志
 -------------------------------
 
-查看系统审计日志。
+查看系统审计日志，支持分页和过滤。
 
 **认证要求**：是
 
@@ -1982,12 +2590,30 @@ view_audit_logs - 查看审计日志
    * - 字段
      - 类型
      - 说明
-   * - limit
-     - Integer
-     - 返回记录数量限制（可选，默认 100）
    * - offset
      - Integer
-     - 偏移量，用于分页（可选，默认 0）
+     - 偏移量，用于分页（可选，默认 0，最小 0）
+   * - count
+     - Integer
+     - 返回记录数量（可选，默认 50，最小 0，最大 100）
+   * - filters
+     - Array
+     - 操作类型过滤列表（可选，空数组表示不过滤）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "view_audit_logs",
+       "data": {
+           "offset": 0,
+           "count": 50,
+           "filters": ["login", "create_user"]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -1995,22 +2621,81 @@ view_audit_logs - 查看审计日志
 
    {
        "code": 200,
-       "message": "Audit logs retrieved successfully",
+       "message": "Success",
        "data": {
-           "logs": [
+           "total": 1000,
+           "entries": [
                {
                    "id": 1,
                    "action": "login",
                    "username": "admin",
-                   "result": 200,
                    "target": "admin",
+                   "data": null,
+                   "result": 0,
                    "remote_address": "127.0.0.1",
-                   "timestamp": 1699999999.0
+                   "logged_time": 1699999999.0
                }
-           ],
-           "total": 1000
-       }
+           ]
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``total``: 符合过滤条件的总记录数（用于分页）
+- ``entries``: 审计日志条目数组
+  - ``id``: 日志条目 ID
+  - ``action``: 执行的操作
+  - ``username``: 执行操作的用户
+  - ``target``: 操作目标（可能为 null）
+  - ``data``: 附加数据（可能为 null）
+  - ``result``: 操作结果代码（0 表示成功）
+  - ``remote_address``: 客户端 IP 地址
+  - ``logged_time``: 日志记录时间
+
+**错误响应**：
+
+- ``401``: 认证失败
+- ``403``: 权限不足
+
+shutdown - 关闭服务器
+----------------------
+
+关闭 CFMS 服务器。
+
+**认证要求**：是
+
+**所需权限**：``shutdown``
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "shutdown",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Server is shutting down",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足或认证失败
+
+.. danger::
+
+   此操作会立即关闭服务器，所有活动连接将被断开！不可撤销！
 
 ===================
 文件传输 API
