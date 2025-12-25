@@ -2236,11 +2236,22 @@ unblock_user - 解封用户
 list_groups - 列出用户组
 -------------------------
 
-列出系统中的所有用户组。
+列出系统中的所有用户组及其信息。
 
 **认证要求**：是
 
 **所需权限**：``list_groups``
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "list_groups",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -2248,25 +2259,41 @@ list_groups - 列出用户组
 
    {
        "code": 200,
-       "message": "Groups listed successfully",
+       "message": "List of groups",
        "data": {
            "groups": [
                {
-                   "group_name": "user",
-                   "created_time": 1699999999.0
+                   "name": "user",
+                   "display_name": "普通用户",
+                   "permissions": ["set_passwd"],
+                   "members": ["user1", "user2"]
                },
                {
-                   "group_name": "sysop",
-                   "created_time": 1699999999.0
+                   "name": "sysop",
+                   "display_name": "系统管理员",
+                   "permissions": ["shutdown", "create_user", ...],
+                   "members": ["admin"]
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``name``: 组名（唯一标识符）
+- ``display_name``: 显示名称
+- ``permissions``: 组拥有的所有权限列表
+- ``members``: 组成员用户名列表
+
+**错误响应**：
+
+- ``403``: 权限不足
 
 create_group - 创建用户组
 --------------------------
 
-创建新用户组。
+创建新用户组，可以同时配置权限。
 
 **认证要求**：是
 
@@ -2282,25 +2309,123 @@ create_group - 创建用户组
      - 说明
    * - group_name
      - String
-     - 用户组名称（唯一）
+     - 用户组名称（唯一），必填
+   * - display_name
+     - String/null
+     - 显示名称（可选）
+   * - permissions
+     - Array
+     - 权限配置数组（可选）
+
+**权限配置格式**：
+
+.. code-block:: json
+
+   {
+       "permission": "create_document",
+       "start_time": 0,
+       "end_time": null
+   }
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "create_group",
+       "data": {
+           "group_name": "moderator",
+           "display_name": "内容审核员",
+           "permissions": [
+               {
+                   "permission": "delete_document",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group created successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 组名已存在或权限配置格式错误
+- ``403``: 权限不足
+
+.. warning::
+
+   ``create_group`` 是一个危险权限，应仅授予管理员。
 
 delete_group - 删除用户组
 --------------------------
 
-删除用户组。
+删除用户组及其所有权限配置。
 
 **认证要求**：是
 
 **所需权限**：``delete_group``
 
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - group_name
+     - String
+     - 要删除的用户组名称
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "delete_group",
+       "data": {
+           "group_name": "moderator"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group deleted successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户组不存在
+
 .. warning::
 
-   删除用户组会影响所有属于该组的用户！
+   删除用户组会影响所有属于该组的用户，他们将失去从该组继承的所有权限！
 
 rename_group - 重命名用户组
 ----------------------------
 
-修改用户组名称。
+修改用户组的名称或显示名称。
 
 **认证要求**：是
 
@@ -2314,17 +2439,56 @@ rename_group - 重命名用户组
    * - 字段
      - 类型
      - 说明
-   * - old_name
+   * - group_name
      - String
      - 当前组名
    * - new_name
      - String
-     - 新组名
+     - 新组名（可选）
+   * - new_display_name
+     - String/null
+     - 新显示名称（可选）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_group",
+       "data": {
+           "group_name": "moderator",
+           "new_name": "content_moderator",
+           "new_display_name": "内容管理员"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group renamed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 新组名已存在或未提供任何修改
+- ``403``: 权限不足
+- ``404``: 用户组不存在
+
+.. note::
+
+   可以只修改组名、只修改显示名称，或同时修改两者。
 
 get_group_info - 获取用户组信息
 -------------------------------
 
-获取用户组的详细信息。
+获取用户组的详细信息，包括权限和成员。
 
 **认证要求**：是
 
@@ -2342,6 +2506,19 @@ get_group_info - 获取用户组信息
      - String
      - 用户组名称
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_group_info",
+       "data": {
+           "group_name": "sysop"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
@@ -2351,6 +2528,7 @@ get_group_info - 获取用户组信息
        "message": "Group info retrieved successfully",
        "data": {
            "group_name": "sysop",
+           "display_name": "系统管理员",
            "created_time": 1699999999.0,
            "permissions": [
                {
@@ -2363,14 +2541,21 @@ get_group_info - 获取用户组信息
                    "start_time": 0,
                    "end_time": null
                }
-           ]
-       }
+           ],
+           "members": ["admin"]
+       },
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户组不存在
 
 change_group_permissions - 修改用户组权限
 -----------------------------------------
 
-修改用户组的权限配置。
+修改用户组的权限配置，会替换现有的所有权限。
 
 **认证要求**：是
 
@@ -2401,6 +2586,57 @@ change_group_permissions - 修改用户组权限
        "end_time": null
    }
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "change_group_permissions",
+       "data": {
+           "group_name": "moderator",
+           "permissions": [
+               {
+                   "permission": "delete_document",
+                   "start_time": 0,
+                   "end_time": null
+               },
+               {
+                   "permission": "rename_document",
+                   "start_time": 0,
+                   "end_time": 1700003599.0
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group permissions changed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``start_time``: 生效时间（Unix 时间戳），0 表示立即生效
+- ``end_time``: 过期时间（Unix 时间戳），null 表示永不过期
+
+**错误响应**：
+
+- ``400``: 权限配置格式错误
+- ``403``: 权限不足
+- ``404``: 用户组不存在
+
+.. warning::
+
+   此操作会完全替换组的现有权限配置！如果只想添加或删除特定权限，请先获取现有权限，修改后再提交。
+
 ===================
 访问控制 API
 ===================
@@ -2408,11 +2644,11 @@ change_group_permissions - 修改用户组权限
 grant_access - 授予访问权限
 ----------------------------
 
-为用户或用户组授予对特定资源的访问权限。
+为用户或用户组授予对特定资源的访问权限，支持时间限制。
 
 **认证要求**：是
 
-**所需权限**：``manage_access``
+**所需权限**：``manage_access`` 且对目标资源拥有相应的访问权限
 
 **请求数据**：
 
@@ -2422,21 +2658,27 @@ grant_access - 授予访问权限
    * - 字段
      - 类型
      - 说明
-   * - target_type
-     - String
-     - 目标类型："document" 或 "folder"
-   * - target_id
-     - String
-     - 目标 ID
-   * - subject_type
+   * - entity_type
      - String
      - 授权对象类型："user" 或 "group"
-   * - subject_name
+   * - entity_identifier
      - String
      - 用户名或组名
-   * - access_type
+   * - target_type
      - String
-     - 访问类型："read", "write", "move", "manage"
+     - 目标类型："document" 或 "directory"
+   * - target_identifier
+     - String
+     - 目标 ID
+   * - access_types
+     - Array
+     - 访问类型列表（如 ["read", "write"]）
+   * - start_time
+     - Number
+     - 生效时间（Unix 时间戳），最小 0
+   * - end_time
+     - Number
+     - 过期时间（Unix 时间戳），可选
 
 **请求示例**：
 
@@ -2445,20 +2687,45 @@ grant_access - 授予访问权限
    {
        "action": "grant_access",
        "data": {
+           "entity_type": "user",
+           "entity_identifier": "user1",
            "target_type": "document",
-           "target_id": "doc123",
-           "subject_type": "user",
-           "subject_name": "user1",
-           "access_type": "read"
+           "target_identifier": "doc123",
+           "access_types": ["read", "write"],
+           "start_time": 0,
+           "end_time": null
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Success",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``access_types``: 可以包含多个访问类型，每个类型会创建一条单独的访问记录
+- ``start_time``: 0 表示立即生效
+- ``end_time``: null 表示永不过期
+
+**错误响应**：
+
+- ``400``: start_time 晚于 end_time、实体或目标不存在
+- ``403``: 权限不足或对目标资源没有相应的访问权限
+- ``404``: 实体或目标不存在
+
 view_access_entries - 查看访问记录
 ----------------------------------
 
-查看资源的访问控制记录。
+查看用户、组或资源的访问控制记录。
 
 **认证要求**：是
 
@@ -2472,12 +2739,40 @@ view_access_entries - 查看访问记录
    * - 字段
      - 类型
      - 说明
-   * - target_type
+   * - object_type
      - String
-     - 目标类型："document" 或 "folder"
-   * - target_id
+     - 对象类型："user", "group", "document" 或 "directory"
+   * - object_identifier
      - String
-     - 目标 ID
+     - 对象标识符（用户名、组名或资源 ID）
+
+**请求示例 1 - 查看用户的访问权限**：
+
+.. code-block:: json
+
+   {
+       "action": "view_access_entries",
+       "data": {
+           "object_type": "user",
+           "object_identifier": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**请求示例 2 - 查看文档的访问权限**：
+
+.. code-block:: json
+
+   {
+       "action": "view_access_entries",
+       "data": {
+           "object_type": "document",
+           "object_identifier": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -2485,18 +2780,37 @@ view_access_entries - 查看访问记录
 
    {
        "code": 200,
-       "message": "Access entries retrieved successfully",
+       "message": "Success",
        "data": {
-           "entries": [
+           "result": [
                {
-                   "subject_type": "user",
-                   "subject_name": "user1",
+                   "id": 1,
+                   "entity_type": "user",
+                   "entity_identifier": "user1",
+                   "target_type": "document",
+                   "target_identifier": "doc123",
                    "access_type": "read",
-                   "granted_time": 1699999999.0
+                   "start_time": 0,
+                   "end_time": null
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- 当 ``object_type`` 为 "user" 或 "group" 时，返回该实体拥有的所有访问权限
+- 当 ``object_type`` 为 "document" 或 "directory" 时，返回授予该资源的所有访问权限
+- ``result``: 访问记录数组，每条记录包含完整的访问控制信息
+
+**错误响应**：
+
+- ``403``: 权限不足
+
+.. note::
+
+   此 API 用于查看通过 ``grant_access`` 创建的显式访问记录，不包括通过访问规则（access_rules）计算出的权限。
 
 ===================
 系统管理 API
