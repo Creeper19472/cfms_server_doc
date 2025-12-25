@@ -2255,12 +2255,15 @@ download_file - 下载文件
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
    * - document_id
      - String
+     - 是
      - 文档 ID
 
 **响应**：
@@ -2296,12 +2299,15 @@ upload_file - 上传文件
 
 .. list-table::
    :header-rows: 1
+   :widths: 15 10 10 50
 
    * - 字段
      - 类型
+     - 必需
      - 说明
    * - task_id
      - String
+     - 是
      - 上传任务 ID（由 upload_document 创建）
 
 **响应**：确认上传任务已准备就绪
