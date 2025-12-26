@@ -42,7 +42,7 @@ CFMS 服务端需要以下环境：
 - ``PyJWT`` - JWT 令牌生成和验证
 - ``cryptography`` - 加密和 SSL 证书生成
 - ``jsonschema`` - JSON 数据验证
-- ``tomli`` (Python < 3.11) 或内置 ``tomllib`` - TOML 配置文件解析
+- ``tomli`` 和 ``tomllib`` - TOML 配置文件解析
 
 3. 配置服务器
 ^^^^^^^^^^^^^
@@ -104,10 +104,9 @@ CFMS 服务端需要以下环境：
 
 .. code-block:: text
 
-   [INFO] Server starting on 127.0.0.1:5104
-   [INFO] SSL certificate loaded
-   [INFO] Database initialized
-   [INFO] Server ready to accept connections
+   [INFO] Initializating CFMS WebSocket server...
+   [INFO] CFMS Core Version: 0.1.0.250919_alpha
+   [INFO] CFMS WebSocket server started at wss://localhost:5104
 
 6. 验证安装
 ^^^^^^^^^^^
@@ -224,6 +223,8 @@ CFMS 服务端需要以下环境：
       [server]
       ssl_keyfile = "/path/to/your/key.pem"
       ssl_certfile = "/path/to/your/cert.pem"
+
+   不过，对于可能的应用场景，我们也提供了创建自签名证书的工具，详见 :doc:`certtools` 章节。
 
 4. **设置强密码策略**
 
