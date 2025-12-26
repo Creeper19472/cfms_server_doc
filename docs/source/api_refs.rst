@@ -1,7 +1,13 @@
 API 接口参考
 ====================================
 
-本章节详细列出了 CFMS 服务端支持的所有 API 接口。所有接口通过 WebSocket 连接以 JSON 格式进行通信。
+本章节详细列出了 CFMS 服务端应当支持的所有 API 接口。
+
+在本规范中，所有客户端和服务端都必须以 WebSocket 协议进行通信。一般地，本标准仅限
+定了请求和响应须为 JSON 格式，并要求响应代码和附带的数据格式遵循一定的要求；对于服
+务端响应的文本消息，由于其是面向用户而非客户端设计的，因此不做要求。
+
+任何被设计为由客户端自动化处理的信息都不应仅通过文本消息传递。
 
 .. contents:: 目录
    :local:
@@ -10,7 +16,7 @@ API 接口参考
 接口概览
 --------
 
-CFMS API 按功能分为以下几类，共计约 40 个接口：
+CFMS API 按功能分为以下几类，共计 45+ 个接口：
 
 .. list-table:: API 分类
    :header-rows: 1
@@ -20,26 +26,32 @@ CFMS API 按功能分为以下几类，共计约 40 个接口：
      - 接口数量
      - 说明
    * - 服务器与认证
-     - 3
-     - 服务器信息、用户登录、令牌刷新
+     - 4
+     - 服务器信息、监听器注册、用户登录、令牌刷新
+   * - 两步验证
+     - 5
+     - TOTP 两步验证的设置、验证、禁用和状态查询
    * - 文档管理
-     - 8
-     - 文档的增删改查和权限管理
+     - 9
+     - 文档的增删改查、移动和权限管理
+   * - 文件传输
+     - 2
+     - 文件的上传和下载
    * - 目录管理
      - 8
-     - 目录的增删改查和权限管理
+     - 目录的增删改查、移动和权限管理
    * - 用户管理
-     - 9
-     - 用户账户的创建、删除、修改和查询
+     - 10
+     - 用户账户的创建、删除、修改、封禁和头像管理
    * - 用户组管理
      - 6
-     - 用户组的创建、删除和权限配置
+     - 用户组的创建、删除、重命名和权限配置
    * - 访问控制
      - 2
      - 授予访问权限和查看访问记录
    * - 系统管理
-     - 2
-     - 锁定模式和审计日志
+     - 3
+     - 服务器关闭、锁定模式和审计日志
 
 通用规范
 --------
@@ -138,7 +150,7 @@ login - 用户登录
        "token": ""
    }
 
-**成功响应**：
+**成功响应（无 2FA）**：
 
 .. code-block:: json
 
@@ -151,7 +163,21 @@ login - 用户登录
            "nickname": "管理员",
            "permissions": ["shutdown", "create_document", ...],
            "groups": ["sysop", "user"]
-       }
+       },
+       "protocol_version": 3
+   }
+
+**需要 2FA 验证响应**：
+
+.. code-block:: json
+
+   {
+       "code": 202,
+       "message": "Two-factor authentication required",
+       "data": {
+           "method": "totp"
+       },
+       "protocol_version": 3
    }
 
 **字段说明**：
@@ -165,8 +191,12 @@ login - 用户登录
 **错误响应**：
 
 - ``400``: 缺少用户名或密码
-- ``401``: 用户名或密码错误
+- ``401``: 用户名或密码错误或 2FA 验证码无效
 - ``403``: 密码已过期或不符合要求，需要修改
+
+.. note::
+
+   当用户启用了两步验证时，首次登录会返回 202 状态码，需要在请求的 ``data`` 中添加 ``2fa_token`` 字段（6位验证码）重新提交登录请求。
 
 refresh_token - 刷新令牌
 -------------------------
@@ -227,13 +257,252 @@ register_listener - 注册监听连接
 
    {
        "code": 200,
-       "message": "registered as a listener",
-       "data": {}
+       "message": "Registered as a listener",
+       "data": {},
+       "protocol_version": 3
    }
 
 .. note::
 
-   监听连接不应主动发送其他请求，仅用于接收服务器推送的消息。
+   监听连接不应主动发送其他请求，仅用于接收服务器推送的消息。服务器在触发事件时会向所有已注册的监听连接广播消息。
+
+===================
+两步验证 API
+===================
+
+setup_2fa - 设置两步验证
+-------------------------
+
+为当前用户设置 TOTP（基于时间的一次性密码）两步验证。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 50
+
+   * - 字段
+     - 类型
+     - 说明
+   * - method
+     - String
+     - 可选。验证方法，目前仅支持 "totp"
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "setup_2fa",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication setup initiated. Please verify with your authenticator app.",
+       "data": {
+           "secret": "BASE32_SECRET_KEY",
+           "provisioning_uri": "otpauth://totp/CFMS:admin?secret=...",
+           "backup_codes": ["code1", "code2", ...]
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``secret``: TOTP 密钥（Base32 编码），用于手动输入
+- ``provisioning_uri``: 配置 URI，可生成 QR 码供认证器应用扫描
+- ``backup_codes``: 备份代码列表，用于在无法使用认证器时恢复访问
+
+**错误响应**：
+
+- ``400``: 两步验证已启用，需要先取消
+- ``404``: 用户不存在
+
+.. warning::
+
+   请妥善保管备份代码！如果丢失认证器且没有备份代码，将无法登录账户。
+
+validate_2fa - 验证两步验证
+---------------------------
+
+验证并启用两步验证。在设置两步验证后必须验证才能生效。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 50
+
+   * - 字段
+     - 类型
+     - 说明
+   * - token
+     - String
+     - 认证器生成的 6 位验证码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "validate_2fa",
+       "data": {
+           "token": "123456"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication enabled successfully",
+       "data": {
+           "method": "totp"
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 两步验证未设置或已启用
+- ``401``: 验证码无效
+- ``404``: 用户不存在
+
+disable_2fa - 禁用两步验证
+--------------------------
+
+禁用当前用户的两步验证。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+   :widths: 15 10 50
+
+   * - 字段
+     - 类型
+     - 说明
+   * - token
+     - String
+     - 认证器生成的 6 位验证码或备份代码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "disable_2fa",
+       "data": {
+           "token": "123456"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication disabled successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 两步验证未启用
+- ``401``: 验证码无效
+- ``404``: 用户不存在
+
+cancel_2fa_setup - 取消两步验证设置
+-----------------------------------
+
+取消正在进行中但尚未验证的两步验证设置。
+
+**认证要求**：是
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "cancel_2fa_setup",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**成功响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication setup cancelled",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 没有待验证的两步验证设置或两步验证已启用
+- ``404``: 用户不存在
+
+get_2fa_status - 查询两步验证状态
+---------------------------------
+
+查询当前用户的两步验证状态。
+
+**认证要求**：是
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "get_2fa_status",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Two-factor authentication status retrieved",
+       "data": {
+           "enabled": true,
+           "method": "totp"
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``enabled``: 两步验证是否已启用
+- ``method``: 验证方法（"totp" 或 null）
 
 ===================
 文档管理 API
@@ -246,7 +515,7 @@ list_directory - 列出目录内容
 
 **认证要求**：是
 
-**所需权限**：对目标目录的读取权限
+**所需权限**：对目标目录的读取权限（或 ``super_list_directory``）
 
 **请求数据**：
 
@@ -257,8 +526,8 @@ list_directory - 列出目录内容
      - 类型
      - 说明
    * - folder_id
-     - String
-     - 目录 ID，使用 "root" 表示根目录
+     - String/null
+     - 目录 ID。使用 null 表示根目录
 
 **请求示例**：
 
@@ -267,7 +536,7 @@ list_directory - 列出目录内容
    {
        "action": "list_directory",
        "data": {
-           "folder_id": "root"
+           "folder_id": null
        },
        "username": "admin",
        "token": "your_token"
@@ -279,15 +548,16 @@ list_directory - 列出目录内容
 
    {
        "code": 200,
-       "message": "Directory listed successfully",
+       "message": "Directory listing successful",
        "data": {
+           "parent_id": "/",
            "documents": [
                {
                    "id": "doc1",
                    "title": "Document 1",
-                   "size": 1024,
                    "created_time": 1699999999.0,
-                   "last_modified": 1699999999.0
+                   "last_modified": 1699999999.0,
+                   "size": 1024
                }
            ],
            "folders": [
@@ -297,17 +567,29 @@ list_directory - 列出目录内容
                    "created_time": 1699999999.0
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``parent_id``: 父目录 ID，根目录的父目录为 "/"，null 表示没有父目录
+- ``documents``: 文档列表，每个文档包含 id、title、created_time、last_modified 和 size
+- ``folders``: 子目录列表，每个目录包含 id、name 和 created_time
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 目录不存在
 
 create_document - 创建文档
 --------------------------
 
-在指定目录下创建新文档。
+在指定目录下创建新文档并返回上传任务信息。
 
 **认证要求**：是
 
-**所需权限**：``create_document`` 或 ``super_create_document``
+**所需权限**：``create_document`` （或 ``super_create_document`` 忽略目录写权限）
 
 **请求数据**：
 
@@ -317,15 +599,15 @@ create_document - 创建文档
    * - 字段
      - 类型
      - 说明
-   * - document_id
-     - String
-     - 文档 ID（唯一标识符）
    * - title
      - String
-     - 文档标题
+     - 文档标题，必填
    * - folder_id
-     - String
-     - 所属目录 ID，"root" 表示根目录
+     - String/null
+     - 所属目录 ID，null 表示根目录（可选）
+   * - access_rules
+     - Object
+     - 访问规则配置（可选）
 
 **请求示例**：
 
@@ -334,9 +616,9 @@ create_document - 创建文档
    {
        "action": "create_document",
        "data": {
-           "document_id": "my_doc",
            "title": "My Document",
-           "folder_id": "root"
+           "folder_id": null,
+           "access_rules": {}
        },
        "username": "admin",
        "token": "your_token"
@@ -348,22 +630,37 @@ create_document - 创建文档
 
    {
        "code": 200,
-       "message": "Document created successfully",
+       "message": "Task successfully created",
        "data": {
-           "document_id": "my_doc"
-       }
+           "document_id": "abc123...",
+           "task_data": {
+               "task_id": "task123",
+               "start_time": 1699999999.0,
+               "end_time": 1700003599.0
+           }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``document_id``: 新创建的文档 ID
+- ``task_data``: 文件上传任务信息
+  - ``task_id``: 任务 ID，用于后续文件上传
+  - ``start_time``: 任务开始时间
+  - ``end_time``: 任务结束时间（通常为开始时间 + 1小时）
 
 **错误响应**：
 
-- ``400``: 缺少必需字段或字段格式错误
-- ``403``: 权限不足
-- ``409``: 文档 ID 已存在
+- ``400``: 缺少标题或设置访问规则失败
+- ``403``: 权限不足或无权设置访问规则
+- ``404``: 父目录不存在
+- ``409``: 文档名称冲突（当配置不允许重名时）
 
 get_document - 获取文档
 ------------------------
 
-获取文档的完整信息（不包含文件内容）。
+获取文档的基本信息并创建下载任务。
 
 **认证要求**：是
 
@@ -381,38 +678,80 @@ get_document - 获取文档
      - String
      - 文档 ID
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_document",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
 
    {
        "code": 200,
-       "message": "Document retrieved successfully",
+       "message": "Document successfully fetched",
        "data": {
-           "document_id": "my_doc",
+           "document_id": "doc123",
            "title": "My Document",
-           "folder_id": "root",
-           "created_time": 1699999999.0,
-           "revisions": [
-               {
-                   "revision_id": 1,
-                   "file_id": "file123",
-                   "created_time": 1699999999.0
-               }
-           ]
-       }
+           "task_data": {
+               "task_id": "task456",
+               "start_time": 1699999999.0,
+               "end_time": 1700003599.0
+           }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``task_data``: 文件下载任务信息，使用 ``download_file`` 接口下载文件内容
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在或文档没有活动版本
 
 get_document_info - 获取文档信息
 --------------------------------
 
-获取文档的基本信息和访问规则。
+获取文档的详细信息，包括大小、时间和访问规则。
 
 **认证要求**：是
 
 **所需权限**：对文档的读取权限
 
-**请求数据**：同 ``get_document``
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - document_id
+     - String
+     - 文档 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_document_info",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -422,30 +761,106 @@ get_document_info - 获取文档信息
        "code": 200,
        "message": "Document info retrieved successfully",
        "data": {
-           "document_id": "my_doc",
-           "parent_id": "root",
+           "document_id": "doc123",
+           "parent_id": null,
            "title": "My Document",
            "size": 2048,
            "created_time": 1699999999.0,
            "last_modified": 1700000000.0,
-           "access_rules": [],
+           "access_rules": [
+               {
+                   "rule_id": 1,
+                   "access_type": "read",
+                   "rule_data": {...}
+               }
+           ],
            "info_code": 0
-       }
+       },
+       "protocol_version": 3
    }
 
 **info_code 说明**：
 
 - ``0``: 成功获取所有信息
-- ``1``: 无权查看访问规则
+- ``1``: 无权查看访问规则（access_rules 为空）
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在或文档没有活动版本
+
+get_document_access_rules - 获取文档访问规则
+---------------------------------------------
+
+获取文档的访问规则配置，按访问类型分组。
+
+**认证要求**：是
+
+**所需权限**：对文档的读取权限且拥有 ``view_access_rules`` 权限
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - document_id
+     - String
+     - 文档 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_document_access_rules",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Document access rules retrieved successfully",
+       "data": {
+           "read": [
+               {
+                   "match": "any",
+                   "match_groups": [...]
+               }
+           ],
+           "write": [...],
+           "move": [...],
+           "manage": [...]
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+响应数据是一个字典，键为访问类型（read、write、move、manage），值为该类型的规则数据数组。
+
+**错误响应**：
+
+- ``403``: 权限不足或无权查看访问规则
+- ``404``: 文档不存在
 
 delete_document - 删除文档
 ---------------------------
 
-删除指定文档。
+删除指定文档及其所有版本。
 
 **认证要求**：是
 
-**所需权限**：``delete_document``
+**所需权限**：``delete_document`` 且对文档有写权限
 
 **请求数据**：
 
@@ -459,15 +874,35 @@ delete_document - 删除文档
      - String
      - 要删除的文档 ID
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "delete_document",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
 
    {
        "code": 200,
-       "message": "Document deleted successfully",
-       "data": {}
+       "message": "Document successfully deleted",
+       "data": {},
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在
+- ``500``: 删除失败（可能有正在进行的下载任务）
 
 rename_document - 重命名文档
 ----------------------------
@@ -476,7 +911,7 @@ rename_document - 重命名文档
 
 **认证要求**：是
 
-**所需权限**：``rename_document``
+**所需权限**：``rename_document`` 且对文档有写权限
 
 **请求数据**：
 
@@ -493,6 +928,20 @@ rename_document - 重命名文档
      - String
      - 新标题
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_document",
+       "data": {
+           "document_id": "doc123",
+           "new_title": "Updated Title"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
@@ -500,8 +949,15 @@ rename_document - 重命名文档
    {
        "code": 200,
        "message": "Document renamed successfully",
-       "data": {}
+       "data": {},
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``400``: 新标题与当前标题相同或名称冲突
+- ``403``: 权限不足
+- ``404``: 文档不存在
 
 move_document - 移动文档
 ------------------------
@@ -510,7 +966,7 @@ move_document - 移动文档
 
 **认证要求**：是
 
-**所需权限**：``move``
+**所需权限**：``move`` 且对文档有移动权限，对目标目录有写权限
 
 **请求数据**：
 
@@ -524,8 +980,22 @@ move_document - 移动文档
      - String
      - 文档 ID
    * - target_folder_id
-     - String
-     - 目标目录 ID
+     - String/null
+     - 目标目录 ID，null 表示根目录（可选，默认不移动）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "move_document",
+       "data": {
+           "document_id": "doc123",
+           "target_folder_id": "folder456"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -533,18 +1003,25 @@ move_document - 移动文档
 
    {
        "code": 200,
-       "message": "Document moved successfully",
-       "data": {}
+       "message": "Success",
+       "data": {},
+       "protocol_version": 3
    }
 
-upload_document - 上传文档内容
+**错误响应**：
+
+- ``400``: 目标目录中存在同名文档或文件夹
+- ``403``: 权限不足
+- ``404``: 文档或目标目录不存在
+
+upload_document - 上传文档版本
 ------------------------------
 
-为文档创建新版本并上传文件内容。
+为已存在的文档创建新版本并返回上传任务。
 
 **认证要求**：是
 
-**所需权限**：对文档的写入权限
+**所需权限**：对文档的写权限
 
 **请求数据**：
 
@@ -558,11 +1035,208 @@ upload_document - 上传文档内容
      - String
      - 文档 ID
 
-**响应**：返回文件上传任务信息（详见文件传输部分）
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "upload_document",
+       "data": {
+           "document_id": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Task successfully created",
+       "data": {
+           "task_data": {
+               "task_id": "task789",
+               "start_time": 1699999999.0,
+               "end_time": 1700003599.0
+           }
+       },
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``task_data``: 上传任务信息，使用 ``upload_file`` 接口上传文件内容
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 文档不存在
+
+set_document_rules - 设置文档访问规则
+-------------------------------------
+
+为文档设置访问控制规则。
+
+**认证要求**：是
+
+**所需权限**：``set_access_rules`` 且对文档有管理权限
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - document_id
+     - String
+     - 文档 ID
+   * - access_rules
+     - Object
+     - 访问规则配置，键为访问类型，值为规则数组
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_document_rules",
+       "data": {
+           "document_id": "doc123",
+           "access_rules": {
+               "read": [
+                   {
+                       "match": "any",
+                       "match_groups": ["user"]
+                   }
+               ],
+               "write": []
+           }
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Set access rules successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 规则格式错误
+- ``403``: 权限不足
+- ``404``: 文档不存在
+
+.. note::
+
+   访问规则的详细格式请参考 :doc:`access_control`。
 
 ===================
-目录管理 API
+文件传输 API
 ===================
+
+download_file - 下载文件
+--------------------------
+
+通过任务 ID 下载文件。此接口需要先通过 ``get_document`` 获取任务 ID。
+
+**认证要求**：否（任务 ID 本身提供认证）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - task_id
+     - String
+     - 下载任务 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "download_file",
+       "data": {
+           "task_id": "task123"
+       },
+       "username": "",
+       "token": ""
+   }
+
+**响应**：
+
+服务器会直接通过 WebSocket 发送文件的二进制数据，不返回 JSON 响应。
+
+**错误响应**：
+
+- ``400``: 任务状态无效或任务时间无效
+- ``404``: 任务不存在
+
+.. note::
+
+   此接口是锁定模式白名单操作，即使在锁定模式下也可使用。
+   任务有效期为 1 小时，超时后需要重新创建任务。
+
+upload_file - 上传文件
+-----------------------
+
+通过任务 ID 上传文件。此接口需要先通过 ``create_document`` 或 ``upload_document`` 获取任务 ID。
+
+**认证要求**：否（任务 ID 本身提供认证）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - task_id
+     - String
+     - 上传任务 ID
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "upload_file",
+       "data": {
+           "task_id": "task456"
+       },
+       "username": "",
+       "token": ""
+   }
+
+**响应**：
+
+服务器准备好接收文件数据后会发送确认响应，客户端应通过 WebSocket 发送文件的二进制数据。
+
+**错误响应**：
+
+- ``400``: 任务状态无效或任务时间无效
+- ``404``: 任务不存在
+
+.. note::
+
+   此接口是锁定模式白名单操作。
+   文件上传采用分块传输，默认块大小为 2MB。
+   任务有效期为 1 小时。
 
 create_directory - 创建目录
 ----------------------------
@@ -720,7 +1394,7 @@ move_directory - 移动目录
 list_users - 列出所有用户
 --------------------------
 
-列出系统中的所有用户。
+列出系统中的所有用户，包括权限和组信息。
 
 **认证要求**：是
 
@@ -743,29 +1417,43 @@ list_users - 列出所有用户
 
    {
        "code": 200,
-       "message": "Users listed successfully",
+       "message": "List of users",
        "data": {
            "users": [
                {
                    "username": "admin",
                    "nickname": "管理员",
                    "created_time": 1699999999.0,
-                   "last_login": 1700000000.0
+                   "last_login": 1700000000.0,
+                   "permissions": ["shutdown", "create_user", ...],
+                   "groups": ["sysop", "user"]
                },
                {
                    "username": "user1",
                    "nickname": "User 1",
                    "created_time": 1700000000.0,
-                   "last_login": null
+                   "last_login": null,
+                   "permissions": ["set_passwd"],
+                   "groups": ["user"]
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``permissions``: 用户拥有的所有权限列表（包括从组继承的权限）
+- ``groups``: 用户所属的用户组列表
+
+**错误响应**：
+
+- ``403``: 权限不足
 
 create_user - 创建用户
 -----------------------
 
-创建新用户账户。
+创建新用户账户，可以同时配置权限和用户组。
 
 **认证要求**：是
 
@@ -781,13 +1469,39 @@ create_user - 创建用户
      - 说明
    * - username
      - String
-     - 用户名，唯一
+     - 用户名，唯一，必填
    * - password
      - String
-     - 初始密码
+     - 初始密码，必填
    * - nickname
      - String
      - 用户昵称（可选）
+   * - permissions
+     - Array
+     - 权限配置数组（可选）
+   * - groups
+     - Array
+     - 用户组配置数组（可选）
+
+**权限配置格式**：
+
+.. code-block:: json
+
+   {
+       "permission": "create_document",
+       "start_time": 0,
+       "end_time": null
+   }
+
+**用户组配置格式**：
+
+.. code-block:: json
+
+   {
+       "group_name": "user",
+       "start_time": 0,
+       "end_time": null
+   }
 
 **请求示例**：
 
@@ -798,16 +1512,50 @@ create_user - 创建用户
        "data": {
            "username": "newuser",
            "password": "secure_password",
-           "nickname": "New User"
+           "nickname": "New User",
+           "permissions": [
+               {
+                   "permission": "set_passwd",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ],
+           "groups": [
+               {
+                   "group_name": "user",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User created successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 用户名已存在、权限或组格式错误、指定的组不存在
+- ``403``: 权限不足
+
+.. warning::
+
+   ``create_user`` 是一个危险权限，应仅授予管理员。
+
 delete_user - 删除用户
 -----------------------
 
-删除用户账户。
+删除用户账户及其所有相关数据。
 
 **认证要求**：是
 
@@ -821,18 +1569,52 @@ delete_user - 删除用户
    * - 字段
      - 类型
      - 说明
-   * - target_username
+   * - username
      - String
      - 要删除的用户名
 
-rename_user - 重命名用户
--------------------------
+**请求示例**：
 
-修改用户的用户名。
+.. code-block:: json
+
+   {
+       "action": "delete_user",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User deleted successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 尝试删除自己或缺少用户名
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   删除用户会同时删除其组成员关系和封禁记录。
+
+rename_user - 修改用户昵称
+--------------------------
+
+修改用户的昵称（显示名称）。
 
 **认证要求**：是
 
-**所需权限**：``rename_user``
+**所需权限**：``rename_user`` （修改他人）或无需权限（修改自己）
 
 **请求数据**：
 
@@ -842,12 +1624,42 @@ rename_user - 重命名用户
    * - 字段
      - 类型
      - 说明
-   * - old_username
+   * - username
      - String
-     - 当前用户名
-   * - new_username
-     - String
-     - 新用户名
+     - 要修改的用户名
+   * - nickname
+     - String/null
+     - 新昵称，null 表示清空昵称
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_user",
+       "data": {
+           "username": "user1",
+           "nickname": "Updated Nickname"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User renamed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 用户不存在
+- ``403``: 权限不足（修改他人时需要权限）
 
 get_user_info - 获取用户信息
 ----------------------------
@@ -866,9 +1678,22 @@ get_user_info - 获取用户信息
    * - 字段
      - 类型
      - 说明
-   * - target_username
+   * - username
      - String
      - 目标用户名
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_user_info",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -884,8 +1709,411 @@ get_user_info - 获取用户信息
            "last_login": 1700000000.0,
            "groups": ["user"],
            "permissions": ["set_passwd"]
-       }
+       },
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+block_user - 封禁用户
+----------------------
+
+封禁用户账户，限制其对特定资源的访问。
+
+**认证要求**：是
+
+**所需权限**：``block``
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 要封禁的用户名
+   * - target
+     - Object
+     - 封禁目标配置
+   * - block_types
+     - Array
+     - 封禁类型列表（如 ["read", "write"]）
+   * - duration
+     - Number
+     - 封禁时长（秒），null 表示永久封禁
+
+**目标配置格式**：
+
+.. code-block:: json
+
+   {
+       "type": "all",  // 或 "document", "directory"
+       "id": "doc123"  // 仅当 type 不是 "all" 时需要
+   }
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "block_user",
+       "data": {
+           "username": "user1",
+           "target": {
+               "type": "document",
+               "id": "doc123"
+           },
+           "block_types": ["read", "write"],
+           "duration": 3600
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User blocked successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 参数格式错误或目标资源不存在
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   此操作每次只能添加一个封禁记录。如需添加多个封禁，应分批请求。
+
+unblock_user - 解封用户
+------------------------
+
+解除用户的封禁。
+
+**认证要求**：是
+
+**所需权限**：``unblock``
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 要解封的用户名
+   * - target
+     - Object
+     - 解封目标配置（格式同 block_user）
+   * - block_types
+     - Array
+     - 要解除的封禁类型列表
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "unblock_user",
+       "data": {
+           "username": "user1",
+           "target": {
+               "type": "document",
+               "id": "doc123"
+           },
+           "block_types": ["read"]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User unblocked successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 参数格式错误
+- ``403``: 权限不足
+- ``404``: 用户或封禁记录不存在
+
+get_user_avatar - 获取用户头像
+------------------------------
+
+获取用户的头像图片数据。
+
+**认证要求**：是
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_user_avatar",
+       "data": {
+           "username": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Avatar retrieved successfully",
+       "data": {
+           "avatar_data": "base64_encoded_image_data",
+           "mime_type": "image/png"
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``404``: 用户不存在或未设置头像
+
+set_user_avatar - 设置用户头像
+------------------------------
+
+设置用户的头像图片。
+
+**认证要求**：是
+
+**所需权限**：``set_user_avatar`` （设置他人）或无需权限（设置自己）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+   * - avatar_data
+     - String
+     - Base64 编码的图片数据
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_user_avatar",
+       "data": {
+           "username": "user1",
+           "avatar_data": "iVBORw0KGgoAAAANSUhEUgAAAAUA..."
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Avatar set successfully",
+       "data": {
+           "avatar_id": "avatar123"
+       },
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 图片数据无效或格式不支持
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   支持的图片格式：JPEG, PNG, GIF, BMP, WebP等常见格式。
+
+change_user_groups - 修改用户组
+-------------------------------
+
+修改用户所属的用户组。
+
+**认证要求**：是
+
+**所需权限**：``change_user_groups``
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 目标用户名
+   * - groups
+     - Array
+     - 用户组配置数组
+
+**用户组配置格式**：
+
+.. code-block:: json
+
+   {
+       "group_name": "sysop",
+       "start_time": 0,
+       "end_time": null
+   }
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "change_user_groups",
+       "data": {
+           "username": "user1",
+           "groups": [
+               {
+                   "group_name": "user",
+                   "start_time": 0,
+                   "end_time": null
+               },
+               {
+                   "group_name": "developer",
+                   "start_time": 1699999999.0,
+                   "end_time": 1700003599.0
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "User groups changed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``start_time``: 生效时间（Unix 时间戳），0 或 null 表示立即生效
+- ``end_time``: 过期时间（Unix 时间戳），null 表示永不过期
+
+**错误响应**：
+
+- ``400``: 组配置格式错误或指定的组不存在
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+set_passwd - 修改密码
+----------------------
+
+修改用户密码。
+
+**认证要求**：是
+
+**所需权限**：``set_passwd`` （修改自己）或 ``super_set_passwd`` （修改他人）
+
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - username
+     - String
+     - 要修改密码的用户名
+   * - old_password
+     - String
+     - 当前密码（修改自己时必需）
+   * - new_password
+     - String
+     - 新密码
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "set_passwd",
+       "data": {
+           "username": "user1",
+           "old_password": "current_password",
+           "new_password": "new_secure_password"
+       },
+       "username": "user1",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Password changed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 缺少必需字段、旧密码错误或新密码不符合要求
+- ``403``: 权限不足
+- ``404``: 用户不存在
+
+.. note::
+
+   密码要求由服务器配置文件中的安全策略决定，可能包括最小长度、必须包含的字符类型等。
+
 
 change_user_groups - 修改用户组
 -------------------------------
@@ -923,33 +2151,6 @@ change_user_groups - 修改用户组
 
 - ``start_time``: 生效时间（Unix 时间戳），0 或 null 表示立即生效
 - ``end_time``: 过期时间（Unix 时间戳），null 表示永不过期
-
-set_passwd - 修改密码
-----------------------
-
-修改用户密码。
-
-**认证要求**：是
-
-**所需权限**：``set_passwd``（修改自己）或 ``super_set_passwd``（修改他人）
-
-**请求数据**：
-
-.. list-table::
-   :header-rows: 1
-
-   * - 字段
-     - 类型
-     - 说明
-   * - target_username
-     - String
-     - 要修改密码的用户名
-   * - old_password
-     - String
-     - 当前密码（修改自己时必需）
-   * - new_password
-     - String
-     - 新密码
 
 block_user - 封禁用户
 ----------------------
@@ -1006,11 +2207,22 @@ unblock_user - 解封用户
 list_groups - 列出用户组
 -------------------------
 
-列出系统中的所有用户组。
+列出系统中的所有用户组及其信息。
 
 **认证要求**：是
 
 **所需权限**：``list_groups``
+
+**请求**：
+
+.. code-block:: json
+
+   {
+       "action": "list_groups",
+       "data": {},
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -1018,25 +2230,41 @@ list_groups - 列出用户组
 
    {
        "code": 200,
-       "message": "Groups listed successfully",
+       "message": "List of groups",
        "data": {
            "groups": [
                {
-                   "group_name": "user",
-                   "created_time": 1699999999.0
+                   "name": "user",
+                   "display_name": "普通用户",
+                   "permissions": ["set_passwd"],
+                   "members": ["user1", "user2"]
                },
                {
-                   "group_name": "sysop",
-                   "created_time": 1699999999.0
+                   "name": "sysop",
+                   "display_name": "系统管理员",
+                   "permissions": ["shutdown", "create_user", ...],
+                   "members": ["admin"]
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- ``name``: 组名（唯一标识符）
+- ``display_name``: 显示名称
+- ``permissions``: 组拥有的所有权限列表
+- ``members``: 组成员用户名列表
+
+**错误响应**：
+
+- ``403``: 权限不足
 
 create_group - 创建用户组
 --------------------------
 
-创建新用户组。
+创建新用户组，可以同时配置权限。
 
 **认证要求**：是
 
@@ -1052,25 +2280,123 @@ create_group - 创建用户组
      - 说明
    * - group_name
      - String
-     - 用户组名称（唯一）
+     - 用户组名称（唯一），必填
+   * - display_name
+     - String/null
+     - 显示名称（可选）
+   * - permissions
+     - Array
+     - 权限配置数组（可选）
+
+**权限配置格式**：
+
+.. code-block:: json
+
+   {
+       "permission": "create_document",
+       "start_time": 0,
+       "end_time": null
+   }
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "create_group",
+       "data": {
+           "group_name": "moderator",
+           "display_name": "内容审核员",
+           "permissions": [
+               {
+                   "permission": "delete_document",
+                   "start_time": 0,
+                   "end_time": null
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group created successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 组名已存在或权限配置格式错误
+- ``403``: 权限不足
+
+.. warning::
+
+   ``create_group`` 是一个危险权限，应仅授予管理员。
 
 delete_group - 删除用户组
 --------------------------
 
-删除用户组。
+删除用户组及其所有权限配置。
 
 **认证要求**：是
 
 **所需权限**：``delete_group``
 
+**请求数据**：
+
+.. list-table::
+   :header-rows: 1
+
+   * - 字段
+     - 类型
+     - 说明
+   * - group_name
+     - String
+     - 要删除的用户组名称
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "delete_group",
+       "data": {
+           "group_name": "moderator"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group deleted successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户组不存在
+
 .. warning::
 
-   删除用户组会影响所有属于该组的用户！
+   删除用户组会影响所有属于该组的用户，他们将失去从该组继承的所有权限！
 
 rename_group - 重命名用户组
 ----------------------------
 
-修改用户组名称。
+修改用户组的名称或显示名称。
 
 **认证要求**：是
 
@@ -1084,17 +2410,56 @@ rename_group - 重命名用户组
    * - 字段
      - 类型
      - 说明
-   * - old_name
+   * - group_name
      - String
      - 当前组名
    * - new_name
      - String
-     - 新组名
+     - 新组名（可选）
+   * - new_display_name
+     - String/null
+     - 新显示名称（可选）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "rename_group",
+       "data": {
+           "group_name": "moderator",
+           "new_name": "content_moderator",
+           "new_display_name": "内容管理员"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group renamed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**错误响应**：
+
+- ``400``: 新组名已存在或未提供任何修改
+- ``403``: 权限不足
+- ``404``: 用户组不存在
+
+.. note::
+
+   可以只修改组名、只修改显示名称，或同时修改两者。
 
 get_group_info - 获取用户组信息
 -------------------------------
 
-获取用户组的详细信息。
+获取用户组的详细信息，包括权限和成员。
 
 **认证要求**：是
 
@@ -1112,6 +2477,19 @@ get_group_info - 获取用户组信息
      - String
      - 用户组名称
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "get_group_info",
+       "data": {
+           "group_name": "sysop"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
 **响应**：
 
 .. code-block:: json
@@ -1121,6 +2499,7 @@ get_group_info - 获取用户组信息
        "message": "Group info retrieved successfully",
        "data": {
            "group_name": "sysop",
+           "display_name": "系统管理员",
            "created_time": 1699999999.0,
            "permissions": [
                {
@@ -1133,14 +2512,21 @@ get_group_info - 获取用户组信息
                    "start_time": 0,
                    "end_time": null
                }
-           ]
-       }
+           ],
+           "members": ["admin"]
+       },
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``403``: 权限不足
+- ``404``: 用户组不存在
 
 change_group_permissions - 修改用户组权限
 -----------------------------------------
 
-修改用户组的权限配置。
+修改用户组的权限配置，会替换现有的所有权限。
 
 **认证要求**：是
 
@@ -1171,6 +2557,57 @@ change_group_permissions - 修改用户组权限
        "end_time": null
    }
 
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "change_group_permissions",
+       "data": {
+           "group_name": "moderator",
+           "permissions": [
+               {
+                   "permission": "delete_document",
+                   "start_time": 0,
+                   "end_time": null
+               },
+               {
+                   "permission": "rename_document",
+                   "start_time": 0,
+                   "end_time": 1700003599.0
+               }
+           ]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Group permissions changed successfully",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``start_time``: 生效时间（Unix 时间戳），0 表示立即生效
+- ``end_time``: 过期时间（Unix 时间戳），null 表示永不过期
+
+**错误响应**：
+
+- ``400``: 权限配置格式错误
+- ``403``: 权限不足
+- ``404``: 用户组不存在
+
+.. warning::
+
+   此操作会完全替换组的现有权限配置！如果只想添加或删除特定权限，请先获取现有权限，修改后再提交。
+
 ===================
 访问控制 API
 ===================
@@ -1178,11 +2615,11 @@ change_group_permissions - 修改用户组权限
 grant_access - 授予访问权限
 ----------------------------
 
-为用户或用户组授予对特定资源的访问权限。
+为用户或用户组授予对特定资源的访问权限，支持时间限制。
 
 **认证要求**：是
 
-**所需权限**：``manage_access``
+**所需权限**：``manage_access`` 且对目标资源拥有相应的访问权限
 
 **请求数据**：
 
@@ -1192,21 +2629,27 @@ grant_access - 授予访问权限
    * - 字段
      - 类型
      - 说明
-   * - target_type
-     - String
-     - 目标类型："document" 或 "folder"
-   * - target_id
-     - String
-     - 目标 ID
-   * - subject_type
+   * - entity_type
      - String
      - 授权对象类型："user" 或 "group"
-   * - subject_name
+   * - entity_identifier
      - String
      - 用户名或组名
-   * - access_type
+   * - target_type
      - String
-     - 访问类型："read", "write", "move", "manage"
+     - 目标类型："document" 或 "directory"
+   * - target_identifier
+     - String
+     - 目标 ID
+   * - access_types
+     - Array
+     - 访问类型列表（如 ["read", "write"]）
+   * - start_time
+     - Number
+     - 生效时间（Unix 时间戳），最小 0
+   * - end_time
+     - Number
+     - 过期时间（Unix 时间戳），可选
 
 **请求示例**：
 
@@ -1215,20 +2658,45 @@ grant_access - 授予访问权限
    {
        "action": "grant_access",
        "data": {
+           "entity_type": "user",
+           "entity_identifier": "user1",
            "target_type": "document",
-           "target_id": "doc123",
-           "subject_type": "user",
-           "subject_name": "user1",
-           "access_type": "read"
+           "target_identifier": "doc123",
+           "access_types": ["read", "write"],
+           "start_time": 0,
+           "end_time": null
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Success",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**字段说明**：
+
+- ``access_types``: 可以包含多个访问类型，每个类型会创建一条单独的访问记录
+- ``start_time``: 0 表示立即生效
+- ``end_time``: null 表示永不过期
+
+**错误响应**：
+
+- ``400``: start_time 晚于 end_time、实体或目标不存在
+- ``403``: 权限不足或对目标资源没有相应的访问权限
+- ``404``: 实体或目标不存在
+
 view_access_entries - 查看访问记录
 ----------------------------------
 
-查看资源的访问控制记录。
+查看用户、组或资源的访问控制记录。
 
 **认证要求**：是
 
@@ -1242,12 +2710,40 @@ view_access_entries - 查看访问记录
    * - 字段
      - 类型
      - 说明
-   * - target_type
+   * - object_type
      - String
-     - 目标类型："document" 或 "folder"
-   * - target_id
+     - 对象类型："user", "group", "document" 或 "directory"
+   * - object_identifier
      - String
-     - 目标 ID
+     - 对象标识符（用户名、组名或资源 ID）
+
+**请求示例 1 - 查看用户的访问权限**：
+
+.. code-block:: json
+
+   {
+       "action": "view_access_entries",
+       "data": {
+           "object_type": "user",
+           "object_identifier": "user1"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
+
+**请求示例 2 - 查看文档的访问权限**：
+
+.. code-block:: json
+
+   {
+       "action": "view_access_entries",
+       "data": {
+           "object_type": "document",
+           "object_identifier": "doc123"
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -1255,18 +2751,37 @@ view_access_entries - 查看访问记录
 
    {
        "code": 200,
-       "message": "Access entries retrieved successfully",
+       "message": "Success",
        "data": {
-           "entries": [
+           "result": [
                {
-                   "subject_type": "user",
-                   "subject_name": "user1",
+                   "id": 1,
+                   "entity_type": "user",
+                   "entity_identifier": "user1",
+                   "target_type": "document",
+                   "target_identifier": "doc123",
                    "access_type": "read",
-                   "granted_time": 1699999999.0
+                   "start_time": 0,
+                   "end_time": null
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
+
+**字段说明**：
+
+- 当 ``object_type`` 为 "user" 或 "group" 时，返回该实体拥有的所有访问权限
+- 当 ``object_type`` 为 "document" 或 "directory" 时，返回授予该资源的所有访问权限
+- ``result``: 访问记录数组，每条记录包含完整的访问控制信息
+
+**错误响应**：
+
+- ``403``: 权限不足
+
+.. note::
+
+   此 API 用于查看通过 ``grant_access`` 创建的显式访问记录，不包括通过访问规则（access_rules）计算出的权限。
 
 ===================
 系统管理 API
@@ -1289,7 +2804,7 @@ lockdown - 锁定系统
    * - 字段
      - 类型
      - 说明
-   * - enable
+   * - status
      - Boolean
      - true 启用锁定，false 禁用锁定
 
@@ -1300,25 +2815,53 @@ lockdown - 锁定系统
    {
        "action": "lockdown",
        "data": {
-           "enable": true
+           "status": true
        },
        "username": "admin",
        "token": "your_token"
    }
 
+**响应**：
+
+.. code-block:: json
+
+   {
+       "code": 200,
+       "message": "Success",
+       "data": {},
+       "protocol_version": 3
+   }
+
+**副作用**：
+
+- 启用锁定模式时，所有正在进行的文件传输任务将被立即终止（end_time 被设置为当前时间）
+- 系统会向所有已注册的监听连接广播锁定状态变更消息
+
 **锁定模式白名单**：
+
+以下操作在锁定模式下仍可使用：
 
 - server_info
 - register_listener
 - login
 - refresh_token
+- validate_2fa
 - upload_file
 - download_file
+
+**错误响应**：
+
+- ``401``: 认证失败
+- ``403``: 权限不足
+
+.. warning::
+
+   启用锁定模式会终止所有正在进行的文件传输任务！
 
 view_audit_logs - 查看审计日志
 -------------------------------
 
-查看系统审计日志。
+查看系统审计日志，支持分页和过滤。
 
 **认证要求**：是
 
@@ -1332,12 +2875,30 @@ view_audit_logs - 查看审计日志
    * - 字段
      - 类型
      - 说明
-   * - limit
-     - Integer
-     - 返回记录数量限制（可选，默认 100）
    * - offset
      - Integer
-     - 偏移量，用于分页（可选，默认 0）
+     - 偏移量，用于分页（可选，默认 0，最小 0）
+   * - count
+     - Integer
+     - 返回记录数量（可选，默认 50，最小 0，最大 100）
+   * - filters
+     - Array
+     - 操作类型过滤列表（可选，空数组表示不过滤）
+
+**请求示例**：
+
+.. code-block:: json
+
+   {
+       "action": "view_audit_logs",
+       "data": {
+           "offset": 0,
+           "count": 50,
+           "filters": ["login", "create_user"]
+       },
+       "username": "admin",
+       "token": "your_token"
+   }
 
 **响应**：
 
@@ -1345,189 +2906,42 @@ view_audit_logs - 查看审计日志
 
    {
        "code": 200,
-       "message": "Audit logs retrieved successfully",
+       "message": "Success",
        "data": {
-           "logs": [
+           "total": 1000,
+           "entries": [
                {
                    "id": 1,
                    "action": "login",
                    "username": "admin",
-                   "result": 200,
                    "target": "admin",
+                   "data": null,
+                   "result": 0,
                    "remote_address": "127.0.0.1",
-                   "timestamp": 1699999999.0
-               }
-           ],
-           "total": 1000
-       }
-   }
-
-===================
-文件传输 API
-===================
-
-download_file - 下载文件
---------------------------
-
-创建文件下载任务。
-
-**认证要求**：是
-
-**所需权限**：对文档的读取权限
-
-**请求数据**：
-
-.. list-table::
-   :header-rows: 1
-
-   * - 字段
-     - 类型
-     - 说明
-   * - document_id
-     - String
-     - 文档 ID
-
-**响应**：
-
-.. code-block:: json
-
-   {
-       "code": 200,
-       "message": "Download task created",
-       "data": {
-           "task_id": "task_abc123",
-           "file_id": "file_xyz789",
-           "start_time": 1699999999.0,
-           "end_time": 1700003599.0
-       }
-   }
-
-**后续步骤**：
-
-1. 使用返回的 ``task_id`` 通过二进制消息下载文件内容
-2. 任务有效期为 1 小时（``end_time`` - ``start_time``）
-
-upload_file - 上传文件
------------------------
-
-创建文件上传任务。
-
-**认证要求**：部分（可使用 task_id 而无需认证）
-
-**所需权限**：对文档的写入权限
-
-**请求数据**：
-
-.. list-table::
-   :header-rows: 1
-
-   * - 字段
-     - 类型
-     - 说明
-   * - task_id
-     - String
-     - 上传任务 ID（由 upload_document 创建）
-
-**响应**：确认上传任务已准备就绪
-
-**后续步骤**：
-
-1. 通过二进制消息上传文件内容
-2. 文件内容分块传输（默认 2MB 块）
-
-===================
-访问规则 API
-===================
-
-set_document_rules - 设置文档访问规则
--------------------------------------
-
-为文档设置访问控制规则。
-
-**认证要求**：是
-
-**所需权限**：``set_access_rules``
-
-**请求数据**：
-
-.. list-table::
-   :header-rows: 1
-
-   * - 字段
-     - 类型
-     - 说明
-   * - document_id
-     - String
-     - 文档 ID
-   * - rules
-     - Array
-     - 访问规则数组
-
-**规则格式**：详见 :doc:`access_control`
-
-set_directory_rules - 设置目录访问规则
----------------------------------------
-
-为目录设置访问控制规则。
-
-**认证要求**：是
-
-**所需权限**：``set_access_rules``
-
-**请求数据**：同 ``set_document_rules``，但使用 ``folder_id``
-
-get_document_access_rules - 获取文档访问规则
----------------------------------------------
-
-获取文档的访问规则配置。
-
-**认证要求**：是
-
-**所需权限**：``view_access_rules``
-
-**请求数据**：
-
-.. list-table::
-   :header-rows: 1
-
-   * - 字段
-     - 类型
-     - 说明
-   * - document_id
-     - String
-     - 文档 ID
-
-**响应**：
-
-.. code-block:: json
-
-   {
-       "code": 200,
-       "message": "Access rules retrieved successfully",
-       "data": {
-           "rules": [
-               {
-                   "rule_id": 1,
-                   "access_type": "read",
-                   "rule_data": {
-                       "match": "any",
-                       "match_groups": [...]
-                   }
+                   "logged_time": 1699999999.0
                }
            ]
-       }
+       },
+       "protocol_version": 3
    }
 
-get_directory_access_rules - 获取目录访问规则
----------------------------------------------
+**字段说明**：
 
-获取目录的访问规则配置。
+- ``total``: 符合过滤条件的总记录数（用于分页）
+- ``entries``: 审计日志条目数组
+  - ``id``: 日志条目 ID
+  - ``action``: 执行的操作
+  - ``username``: 执行操作的用户
+  - ``target``: 操作目标（可能为 null）
+  - ``data``: 附加数据（可能为 null）
+  - ``result``: 操作结果代码（0 表示成功）
+  - ``remote_address``: 客户端 IP 地址
+  - ``logged_time``: 日志记录时间
 
-**认证要求**：是
+**错误响应**：
 
-**所需权限**：``view_access_rules``
-
-**请求数据**：同 ``get_document_access_rules``，但使用 ``folder_id``
+- ``401``: 认证失败
+- ``403``: 权限不足
 
 shutdown - 关闭服务器
 ----------------------
@@ -1556,17 +2970,43 @@ shutdown - 关闭服务器
    {
        "code": 200,
        "message": "Server is shutting down",
-       "data": {}
+       "data": {},
+       "protocol_version": 3
    }
+
+**错误响应**：
+
+- ``403``: 权限不足或认证失败
 
 .. danger::
 
-   此操作会立即关闭服务器，所有活动连接将被断开！
+   此操作会立即关闭服务器，所有活动连接将被断开！不可撤销！
 
-常见错误代码
-------------
 
-所有 API 可能返回的通用错误：
+常见状态码
+----------
+
+所有 API 可能返回的通用状态码：
+
+成功状态码 (2xx)
+^^^^^^^^^^^^^^^^^
+
+.. list-table::
+   :header-rows: 1
+   :widths: 10 30 40
+
+   * - 代码
+     - 含义
+     - 使用场景
+   * - 200
+     - OK
+     - 请求成功，返回数据
+   * - 202
+     - Accepted
+     - 请求已接受，需要额外操作（如 login 需要两步验证）
+
+错误状态码
+^^^^^^^^^^
 
 .. list-table::
    :header-rows: 1
