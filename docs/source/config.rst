@@ -4,17 +4,16 @@
 ============================
 
 CFMS 服务端使用 TOML 格式的配置文件 ``config.toml`` 来管理服务器的运行参数。
-配置文件应位于服务器的工作根目录下。
+配置文件应位于服务器的工作根目录下，与入口文件 ``main.py`` 同级。
 
 .. note:: 
-   配置文件在服务器启动时加载一次，修改后需要重启服务器才能生效。
-   这些设置仅控制基本的启动参数。有关运行时行为的高级控制，请参考权限和访问控制系统。
+   配置文件仅在服务器启动时加载一次，修改后需要重启服务器才能生效。
+   这些设置仅控制服务端的一部分行为。有关运行时行为的高级控制，请参考权限和访问控制系统。
 
 配置文件格式
 ------------------------------
 
-CFMS 使用 Python 3.11+ 内置的 ``tomllib`` 库（或 Python 3.11 以下使用 ``tomli``）
-读取 TOML v1.0 格式的配置文件。
+CFMS 使用在 Python 3.11 引入的 ``tomllib`` 库读取 TOML v1.0 格式的配置文件。
 
 TOML 支持以下数据类型：
 
@@ -28,47 +27,6 @@ TOML 支持以下数据类型：
 8. 内联表（Inline Table）
 
 更多信息请访问 TOML 官方网站：https://toml.io/
-
-完整配置示例
-------------------------------
-
-以下是一个完整的配置文件示例：
-
-.. code-block:: toml
-
-   debug = false
-
-   [server]
-   name = "CFMS WebSocket Server"
-   host = "127.0.0.1"
-   port = 5104
-   dualstack_ipv6 = true
-   secret_key = ""
-   ssl_keyfile = "./content/ssl/key.pem"
-   ssl_certfile = "./content/ssl/cert.pem"
-   file_chunk_size = 2097152  # 2MB
-
-   [document]
-   allow_name_duplicate = false
-
-   [security]
-   passwd_min_length = 8
-   passwd_max_length = 32
-   enable_passwd_force_expiration = true
-   require_passwd_enforcement_changes = true
-   passwd_expire_after_days = 365
-   passwd_must_contain = []
-
-   [database]
-   type = "sqlite"
-   file = "app.db"
-   # MySQL 配置（如果使用 MySQL）
-   host = "localhost"
-   port = 3306
-   username = ""
-   password = ""
-   db_name = "app_db"
-   charset = "utf8mb4"
 
 配置项详解
 ------------------------------
@@ -92,27 +50,21 @@ TOML 支持以下数据类型：
    
    **默认值**：``"CFMS WebSocket Server"``
    
-   **说明**：服务器名称，用于标识和日志记录。
+   **说明**：服务器名称。这个名称将在握手时提供给客户端，并可能被客户端用于展示。
 
 ``host``
    **类型**：字符串（String）
    
-   **默认值**：``"127.0.0.1"``
+   **默认值**：``"localhost"``
    
-   **说明**：服务器监听的 IP 地址。
-   
-   - ``"127.0.0.1"`` - 仅监听本地回环接口
-   - ``"0.0.0.0"`` - 监听所有 IPv4 接口
-   - ``"::"`` - 监听所有 IPv6 接口（需要 dualstack_ipv6）
-   
-   **安全提示**：仅在必要时监听外部接口，并配置防火墙规则。
+   **说明**：服务器监听的地址。
 
 ``port``
    **类型**：整数（Integer）
    
    **默认值**：``5104``
    
-   **说明**：WebSocket 服务器监听的端口号。确保该端口未被其他程序占用。
+   **说明**：监听的端口号。
 
 ``dualstack_ipv6``
    **类型**：布尔值（Boolean）
@@ -127,19 +79,16 @@ TOML 支持以下数据类型：
    **默认值**：（空字符串，首次启动时自动生成）
    
    **说明**：用于签名 JWT 令牌的密钥。服务器会在首次启动时自动生成一个随机密钥。
-   
-   **安全提示**：
-   
-   - 保持该密钥的机密性
-   - 不要在版本控制系统中提交包含实际密钥的配置文件
-   - 更改密钥会使所有现有的用户令牌失效
 
+   .. note::
+      更改此项的值会使所有之前签发的用户令牌失效。这是刻意为之的，以便你可以通过重置此项的值来强制登出所有的用户。
+   
 ``ssl_keyfile``
    **类型**：字符串（String）
    
    **默认值**：``"./content/ssl/key.pem"``
    
-   **说明**：SSL/TLS 私钥文件的路径。用于建立安全的 WSS 连接。
+   **说明**：SSL/TLS 私钥文件的路径。
 
 ``ssl_certfile``
    **类型**：字符串（String）
@@ -148,18 +97,20 @@ TOML 支持以下数据类型：
    
    **说明**：SSL/TLS 证书文件的路径。服务器启动时会检查证书是否存在，
    如果不存在则自动生成自签名证书。
-   
-   **生产环境建议**：使用受信任的证书颁发机构（CA）签发的证书。
+
+   .. note::
+      如果你不打算构建自己的可信证书链但仍希望确保安全的通信，考虑采用受信任的证书颁发机构（CA）签发的证书。客户端通常会信任这些证书。
 
 ``file_chunk_size``
    **类型**：整数（Integer）
    
    **默认值**：``2097152``（2MB）
    
-   **说明**：文件传输时的分块大小（字节）。较大的分块可以提高传输效率，
-   但可能因客户端配置导致传输失败。
-   
-   **推荐值**：1MB - 4MB 之间
+   **说明**：文件传输时的分块大小（单位为字节）。较大的分块可以提高传输效率，
+   但请注意客户端对此项上限的设置。
+
+   .. note::
+      当准备传输时，服务端将与客户端协商最终使用的分块大小。服务端会选择不超过客户端上限的最大值作为实际分块大小。
 
 文档配置 [document]
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -210,7 +161,7 @@ TOML 支持以下数据类型：
    **说明**：是否强制要求不符合密码规则的用户在登录时修改密码。
    
    .. note::
-      即使密码是在规则实施前创建的，也会要求修改。
+      若密码在规则启用前创建，则用户在下一次登录时将被要求修改。
 
 ``passwd_expire_after_days``
    **类型**：整数（Integer）
@@ -222,20 +173,7 @@ TOML 支持以下数据类型：
 ``passwd_must_contain``
    **类型**：数组（Array）
    
-   **默认值**：``[]``（空数组，无特殊要求）
-   
-   **说明**：密码必须包含的字符类型。可选值：
-   
-   - ``"uppercase"`` - 大写字母
-   - ``"lowercase"`` - 小写字母
-   - ``"digit"`` - 数字
-   - ``"special"`` - 特殊字符
-   
-   **示例**：
-   
-   .. code-block:: toml
-   
-      passwd_must_contain = ["uppercase", "lowercase", "digit"]
+   **默认值**：``[]``
 
 数据库配置 [database]
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -311,99 +249,13 @@ MySQL 特定配置
    .. note::
       此功能尚未完全实现。
 
-配置最佳实践
-------------------------------
-
-开发环境
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: toml
-
-   debug = true
-
-   [server]
-   host = "127.0.0.1"
-   port = 5104
-
-   [database]
-   type = "sqlite"
-   file = "dev.db"
-
-   [security]
-   passwd_min_length = 6  # 开发时可以放宽
-   enable_passwd_force_expiration = false
-
-生产环境
-^^^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: toml
-
-   debug = false
-
-   [server]
-   host = "0.0.0.0"  # 根据实际需求
-   port = 5104
-   secret_key = "use-a-strong-random-key-here"
-   ssl_keyfile = "/etc/cfms/ssl/key.pem"
-   ssl_certfile = "/etc/cfms/ssl/cert.pem"
-
-   [database]
-   type = "mysql"
-   host = "db.example.com"
-   username = "cfms_user"
-   password = "strong-database-password"
-   db_name = "cfms_production"
-
-   [security]
-   passwd_min_length = 12
-   passwd_must_contain = ["uppercase", "lowercase", "digit", "special"]
-   enable_passwd_force_expiration = true
-   passwd_expire_after_days = 90
-
 配置文件安全
 ------------------------------
 
-1. **权限控制**
-
-   限制配置文件的读取权限：
-
-   .. code-block:: console
-
-      $ chmod 600 config.toml
-      $ chown cfms-user:cfms-group config.toml
-
-2. **版本控制**
-
-   不要在 Git 中提交包含敏感信息的配置文件：
-
-   .. code-block:: text
-
-      # .gitignore
-      config.toml
-      *.db
-      content/
-
-3. **密钥管理**
-
-   考虑使用环境变量或密钥管理服务：
-
-   .. code-block:: python
-
-      import os
-      secret_key = os.environ.get('CFMS_SECRET_KEY')
+注意不要在 Git 中提交包含敏感信息的配置文件。
 
 故障排除
 ------------------------------
-
-配置文件语法错误
-^^^^^^^^^^^^^^^^
-
-如果看到 TOML 解析错误，检查：
-
-- 引号是否正确闭合
-- 数组和表的语法是否正确
-- 布尔值是否使用 ``true``/ ``false``（小写）
-- 数字是否包含非法字符
 
 配置不生效
 ^^^^^^^^^^

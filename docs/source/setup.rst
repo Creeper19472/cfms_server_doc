@@ -71,44 +71,9 @@ Linux / macOS） 或 ``.venv/Scripts/activate`` （对于 Windows）激活它。
    $ cp config.sample.toml config.toml
    $ nano config.toml  # 或使用您喜欢的编辑器
 
-关键配置项：
+详细配置说明请参见 :doc:`config` 章节。
 
-.. code-block:: toml
-
-   [server]
-   name = "CFMS WebSocket Server"
-   host = "127.0.0.1"  # 监听地址
-   port = 5104         # 监听端口
-   secret_key = ""     # JWT 密钥（首次启动时自动生成）
-
-   [database]
-   type = "sqlite"     # 或 "mysql"
-   file = "app.db"     # SQLite 数据库文件名
-
-详细的配置说明请参见 :doc:`config` 章节。
-
-4. 初始化数据库
-^^^^^^^^^^^^^^^
-
-首次运行时，服务器会自动初始化数据库并创建必要的表结构：
-
-.. code-block:: console
-
-   $ python main.py
-
-初始化过程会：
-
-- 创建所有数据库表
-- 生成自签名 SSL 证书（用于 WSS 连接）
-- 创建默认用户组（``user`` 和 ``sysop``）
-- 创建管理员账户（用户名：``admin``）
-- 生成随机密码并保存到 ``admin_password.txt``
-
-.. warning::
-
-   请妥善保管 ``admin_password.txt`` 中的管理员密码，并在首次登录后立即修改！
-
-5. 启动服务器
+4. 启动服务器
 ^^^^^^^^^^^^^
 
 配置完成后，启动 CFMS 服务器：
@@ -125,7 +90,12 @@ Linux / macOS） 或 ``.venv/Scripts/activate`` （对于 Windows）激活它。
    [INFO] CFMS Core Version: 0.1.0.250919_alpha
    [INFO] CFMS WebSocket server started at wss://localhost:5104
 
-6. 验证安装
+服务器将创建名为 ``admin`` 的默认管理员账户，并将随机生成的密码保存在 ``admin_password.txt`` 文件中。请务必妥善保管该文件，并在首次登录后立即修改管理员密码。
+
+.. note::
+   建议另外创建新的管理员账户，并删除旧有的默认管理员账户，以防止对默认账户和口令的暴力攻击。
+
+5. 验证安装
 ^^^^^^^^^^^
 
 可以使用简单的 Python 脚本测试连接：
@@ -154,58 +124,6 @@ Linux / macOS） 或 ``.venv/Scripts/activate`` （对于 Windows）激活它。
            print(json.loads(response))
 
    asyncio.run(test_connection())
-
-目录结构
---------
-
-安装后的目录结构如下：
-
-.. code-block:: text
-
-   cfms_on_websocket/
-   ├── main.py                    # 服务器主入口
-   ├── config.toml                # 配置文件（需创建）
-   ├── config.sample.toml         # 配置文件示例
-   ├── requirements.txt           # Python 依赖
-   ├── test.py                    # 测试脚本
-   ├── include/                   # 核心代码
-   │   ├── classes/               # 类定义
-   │   ├── database/              # 数据库模型
-   │   ├── handlers/              # 请求处理器
-   │   ├── system/                # 系统工具
-   │   └── util/                  # 工具函数
-   ├── content/                   # 运行时数据
-   │   ├── logs/                  # 日志文件
-   │   └── ssl/                   # SSL 证书
-   └── certtools/                 # 证书工具
-
-数据库初始化详情
-----------------
-
-服务器初始化时会创建以下数据结构：
-
-默认用户组
-^^^^^^^^^^
-
-1. **user** 组：基础用户组，拥有基本权限
-   
-   - ``set_passwd`` - 修改自己的密码
-
-2. **sysop** 组：系统管理员组，拥有完整权限
-   
-   - 所有文档和目录操作权限
-   - 用户和组管理权限
-   - 系统管理权限
-   - 访问控制管理权限
-   - 审计日志查看权限
-
-默认管理员账户
-^^^^^^^^^^^^^^
-
-- **用户名**：``admin``
-- **昵称**：管理员
-- **密码**：随机生成（保存在 ``admin_password.txt``）
-- **所属组**：``sysop`` 和 ``user``
 
 安全最佳实践
 ------------
@@ -245,17 +163,20 @@ Linux / macOS） 或 ``.venv/Scripts/activate`` （对于 Windows）激活它。
 
 4. **设置强密码策略**
 
+   .. caution::
+      ``passwd_must_contain`` 的实现方式仍在改动之中，因此不建议使用此功能。
+
    在配置文件中启用密码要求：
 
    .. code-block:: toml
 
       [security]
       passwd_min_length = 12
-      passwd_must_contain = ["uppercase", "lowercase", "digit", "special"]
+      passwd_must_contain = [] # TODO
 
 5. **定期备份数据库**
 
-   定期备份 ``app.db`` 文件（SQLite）或 MySQL 数据库。
+   定期备份 ``app.db`` 文件（SQLite）或 MySQL 数据库等。
 
 故障排除
 --------
@@ -279,24 +200,6 @@ SSL 证书错误
 
 - ``content/ssl/`` 目录存在且有写入权限
 - 首次启动时自动生成的证书文件完整
-
-数据库连接失败
-^^^^^^^^^^^^^^
-
-对于 MySQL：
-
-- 确认 MySQL 服务正在运行
-- 检查配置文件中的数据库连接信息
-- 确保数据库用户有足够的权限
-
-权限被拒绝
-^^^^^^^^^^
-
-确保运行服务器的用户有权限：
-
-- 读写数据库文件
-- 创建和写入日志目录
-- 读取 SSL 证书文件
 
 下一步
 ------
