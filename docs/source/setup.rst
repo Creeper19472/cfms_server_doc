@@ -6,12 +6,12 @@
 系统要求
 --------
 
-CFMS 服务端需要以下环境：
+CFMS 服务端仅支持在 Python 3.13 及更高版本运行。尽管理论上服务端不存在平台
+特异的实现，但我们仅在 Windows 和 Linux 上进行了测试，因此不确定 macOS 的
+兼容性如何。
 
-- **Python 3.11 或更高版本**（必需，使用了 Python 3.11+ 的新语法特性）
-- **操作系统**：Linux、macOS 或 Windows
-- **数据库**：SQLite（默认）或 MySQL
-- **网络**：支持 WebSocket 的网络环境
+无需额外配置，CFMS 服务端就可依赖 SQLite 数据库而运作。不过为了更好的性能和
+可扩展性，建议在条件允许时换用其他功能更为强大的数据库引擎。
 
 快速开始
 --------
@@ -24,25 +24,42 @@ CFMS 服务端需要以下环境：
 .. code-block:: console
 
    $ git clone https://github.com/creeper19472/cfms_on_websocket.git
-   $ cd cfms_on_websocket
+   $ cd cfms_on_websocket/src
 
 2. 安装依赖
-^^^^^^^^^^^
+^^^^^^^^^^^^^^^
 
-使用 pip 安装所需的 Python 包：
+建议使用虚拟环境来隔离依赖。如果你正使用 pip 来进行包管理，事先运行
 
 .. code-block:: console
+   
+   $ python -m venv .venv
 
-   $ pip install -r requirements.txt
+来创建一个虚拟环境，然后通过运行 ``source .venv/bin/activate`` （对于 
+Linux / macOS） 或 ``.venv/Scripts/activate`` （对于 Windows）激活它。
 
-主要依赖包括：
+.. note::
+   建议使用 uv 来管理 Python 版本和依赖。uv 是一个现代的 Python 包管
+   理工具，提供了更快的安装速度和更好的依赖解析能力。
 
-- ``websockets`` - WebSocket 服务器实现
-- ``sqlalchemy`` - 数据库 ORM
-- ``PyJWT`` - JWT 令牌生成和验证
-- ``cryptography`` - 加密和 SSL 证书生成
-- ``jsonschema`` - JSON 数据验证
-- ``tomli`` 和 ``tomllib`` - TOML 配置文件解析
+   另外，它所使用的 Python 分发版还携带了较新的 OpenSSL 构建，能够提供对
+   后量子加密算法的支持。现在，当 OpenSSL 版本过低（<3.5）时，服务端将在
+   控制台打印一条警告。
+
+.. tabs::
+
+   .. tab:: uv
+
+      .. code-block:: console
+
+         $ uv venv
+         $ uv sync --upgrade
+
+   .. tab:: pip
+
+      .. code-block:: console
+
+         $ pip install .
 
 3. 配置服务器
 ^^^^^^^^^^^^^
