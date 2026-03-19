@@ -32,8 +32,8 @@ CFMS 是自由软件，采用 Apache 2.0 许可证发布。在特定的条件下
    :maxdepth: 2
    :caption: API 文档
 
-   WebSocket 通信协议 <api>
-   API 接口参考 <api_refs>
+   通信协议 <api>
+   API 参考 <api_refs>
 
 .. toctree::
    :maxdepth: 2
