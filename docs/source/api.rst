@@ -1,92 +1,24 @@
-WebSocket 通信协议
+通信协议
 ==================
 
-本章节介绍 CFMS 的 WebSocket 通信协议，包括连接建立、消息格式和通用规范。
+本章节介绍 CFMS 基于 WebSocket 的通信协议，包括连接建立、消息格式和通用规范。
 
 协议概述
 --------
 
-CFMS 使用 **WebSocket** 协议进行客户端与服务器之间的实时双向通信。协议版本为 **v3**。
+CFMS 使用 **WebSocket** 协议进行客户端与服务器之间的实时双向通信。
 
-核心特性
-^^^^^^^^
+我们约定，除握手期间外，客户端和服务端用于通信的每条消息都应是一个JSON文本。
 
-- **传输协议**：WebSocket over TLS (WSS)
-- **数据格式**：JSON
-- **认证方式**：JWT (JSON Web Token)
-- **编码**：UTF-8
-- **协议版本**：3
+客户端通过识别服务端提供的协议版本号，可以确定与目标服务器的兼容性。
+协议版本号通常应在这样两种情况下增加：服务端引入了新的功能，
+而这些功能需要客户端的额外适配才能得到支持；
+或服务端对现有功能进行了不兼容的修改。
 
-连接服务器
-----------
+不同于由服务端和客户端于内部使用的协议版本号，我们还将另外约定一种格式的协议版本号，
+以供区分那些发生在消息格式底层的重大更改。它们将以 ``vX`` 的形式出现，其中 X 是整数。
 
-默认配置
-^^^^^^^^
-
-服务器默认监听地址：``wss://localhost:5104``
-
-Python 连接示例
-^^^^^^^^^^^^^^^^
-
-使用 ``websockets`` 库连接：
-
-.. code-block:: python
-
-   from websockets.sync.client import connect
-   import ssl
-   import json
-
-   # 创建 SSL 上下文（自签名证书）
-   ssl_context = ssl.create_default_context()
-   ssl_context.check_hostname = False
-   ssl_context.verify_mode = ssl.CERT_NONE
-
-   # 连接到服务器
-   with connect("wss://localhost:5104", ssl=ssl_context) as websocket:
-       # 发送请求
-       request = {
-           "action": "server_info",
-           "data": {},
-           "username": "",
-           "token": ""
-       }
-       websocket.send(json.dumps(request))
-       
-       # 接收响应
-       response = websocket.recv()
-       print(json.loads(response))
-
-.. warning::
-
-   上述示例跳过了 SSL 证书验证，仅适用于开发环境。
-   生产环境中应使用受信任的证书并启用完整的证书验证。
-
-JavaScript 连接示例
-^^^^^^^^^^^^^^^^^^^^
-
-.. code-block:: javascript
-
-   const ws = new WebSocket('wss://localhost:5104');
-
-   ws.onopen = function() {
-       // 发送请求
-       const request = {
-           action: "server_info",
-           data: {},
-           username: "",
-           token: ""
-       };
-       ws.send(JSON.stringify(request));
-   };
-
-   ws.onmessage = function(event) {
-       const response = JSON.parse(event.data);
-       console.log(response);
-   };
-
-   ws.onerror = function(error) {
-       console.error('WebSocket Error:', error);
-   };
+下述为 v1 协议。
 
 消息格式规范
 ------------
@@ -94,18 +26,29 @@ JavaScript 连接示例
 请求格式
 ^^^^^^^^
 
-所有客户端请求必须遵循以下 JSON 格式：
+如无特殊说明，下述的请求格式将以 JSON Schema 的形式进行展示。
+如果你还不知道什么是 JSON Schema，可以先`到此 <https://json-schema.org/>`_阅读官方文档。
+
+客户端请求应当遵循如下的格式：
 
 .. code-block:: json
 
    {
-       "action": "string",
-       "data": {},
-       "username": "string",
-       "token": "string"
-   }
-
-请求字段说明：
+        "type": "object",
+        "properties": {
+            "action": {"type": "string"},
+            "data": {"type": "object"},
+            "username": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "token": {"anyOf": [{"type": "string"}, {"type": "null"}]},
+            "nonce": {"type": "string"},
+            "timestamp": {"type": "number"},
+        },
+        "required": ["action", "data"],
+        "dependentRequired": {
+            "username": ["token"],
+            "token": ["username"],
+        },
+    }
 
 .. list-table::
    :header-rows: 1
@@ -115,19 +58,29 @@ JavaScript 连接示例
      - 类型
      - 说明
    * - action
-     - String
-     - 必需。要执行的操作名称，如 ``"login"``, ``"get_document"`` 等。
+     - 必需
+     - 要执行的操作名称，如 ``"login"``, ``"get_document"`` 等。
        详见 :doc:`api_refs` 获取完整列表。
    * - data
-     - Object
-     - 必需。操作所需的数据。具体内容因 action 而异。空对象 ``{}`` 表示无需额外数据。
+     - 必需
+     - 服务端完成请求所需要的数据。当请求的操作无需额外数据时，此项保持 ``{}`` 即可。
    * - username
-     - String
-     - 用户名。某些操作（如登录）可以为空字符串，大多数操作需要有效用户名。
+     - 可选
+     - 用户名。必须和 ``token`` 同时出现。
    * - token
-     - String
+     - 可选
      - JWT 认证令牌。登录后获得，用于后续请求的身份验证。
-       登录和部分无需认证的操作可以为空字符串。
+       登录和部分无需认证的操作可以为空。必须和 ``username`` 同时出现。
+   * - nonce
+     - 可选
+     - 一段字符串，由客户端随机产生，用于防止重放攻击。每个 nonce 只能在通信中出现一次，规定 nonce 的长度不得小于 16 字符。
+
+       对于需要提供用户凭据的请求是必要的。
+   * - timestamp
+     - 可选
+     - 时间戳（Unix 时间），用于防止重放攻击。
+
+       对于需要提供用户凭据的请求是必要的。
 
 响应格式
 ^^^^^^^^
@@ -136,42 +89,44 @@ JavaScript 连接示例
 
 .. code-block:: json
 
-   {
-       "code": 200,
-       "message": "string",
-       "data": {},
-       "protocol_version": 3
-   }
+    {
+        "type": "object",
+        "properties": {
+            "code": { "type": "integer" },
+            "message": { "type": "string" },
+            "data": { "type": "object" },
+            "protocol_version": { "type": "integer" }
+        },
+        "required": ["code", "message", "data", "protocol_version"],
+        "additionalProperties": false
+    }
 
 响应字段说明：
 
 .. list-table::
    :header-rows: 1
-   :widths: 20 10 50
+   :widths: 20 50
 
    * - 字段名
-     - 类型
      - 说明
    * - code
-     - Integer
-     - HTTP 风格的状态码。200 表示成功，4xx 表示客户端错误，5xx 表示服务器错误。
+     - 响应状态码。对于请求的常见操作，在能够较为准确地描述它们的情况下，状态码通常与在 HTTP 风格下的状态码一致。
+     
+       但为准确指明某操作的状态，我们也规定一些特殊的状态码，详见后文的状态码规范。
    * - message
-     - String
-     - 响应消息的文本描述。成功时为操作描述，失败时为错误说明。
+     - 响应消息的文本描述，根据请求操作的不同会有不同的内容。这些信息通常是面向用户的，因此不应由客户端程序进行解析或处理。
    * - data
-     - Object
-     - 响应数据。具体内容因请求类型而异。错误时可能为空对象。
+     - 响应数据，具体内容因请求类型而异。
    * - protocol_version
-     - Integer
-     - 协议版本号，当前为 3。
+     - 由客户端和服务端使用的协议版本号。
 
 状态码规范
 ----------
 
-CFMS 使用 HTTP 风格的状态码：
-
 成功状态码 (2xx)
 ^^^^^^^^^^^^^^^^^
+
+成功状态码通常与 HTTP 协议在此情况下规定的状态码一致。
 
 .. list-table::
    :header-rows: 1
@@ -205,7 +160,7 @@ CFMS 使用 HTTP 风格的状态码：
      - 未认证或认证失败
    * - 403
      - Forbidden
-     - 已认证但无权限执行操作，或密码需要更改
+     - 无权执行指定的操作
    * - 404
      - Not Found
      - 请求的资源不存在
