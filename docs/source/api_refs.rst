@@ -90,10 +90,9 @@ login - 用户登录
 
 **请求参数**:
 
-:param str username: 用户名。
-:param str password: 密码。
-:param str 2fa_token: 双因素验证令牌。
-.. :type 2fa_token: str | None
+:username: (str) 用户名。
+:password: (str) 密码。
+:2fa_token: (str | None) 双因素验证令牌。
 
 **响应**:
 
