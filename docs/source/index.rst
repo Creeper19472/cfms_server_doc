@@ -34,6 +34,7 @@ CFMS 是自由软件，采用 Apache 2.0 许可证发布。在特定的条件下
 
    通信协议 <api>
    API 参考 <api_refs>
+   服务器事件 <server_events>
 
 .. toctree::
    :maxdepth: 2
