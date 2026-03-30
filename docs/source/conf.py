@@ -35,3 +35,6 @@ html_theme = "sphinx_rtd_theme"
 
 # -- Options for EPUB output
 epub_show_urls = "footnote"
+
+with open('_definitions/replacements.rst', 'r', encoding='utf-8') as f:
+    rst_prolog = f.read()

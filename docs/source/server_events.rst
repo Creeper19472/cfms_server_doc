@@ -48,7 +48,7 @@
 
 下列表格的标题为事件名称，表格内容为该事件的 ``data`` 的结构。
 
-.. list-table:: ``lockdown``
+.. list-table:: lockdown
     :header-rows: 1
 
     * - 字段

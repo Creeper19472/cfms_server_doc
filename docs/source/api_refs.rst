@@ -51,132 +51,94 @@ server_info - 获取服务器信息
 
 获取服务器的基本信息和状态。
 
-**认证要求**：无
+**需要认证**：否
 
-**请求**：
+**请求参数**：
 
-.. code-block:: json
-
-   {
-       "action": "server_info",
-       "data": {},
-       "username": "",
-       "token": ""
-   }
+|no_parameter|
 
 **响应**：
 
-.. code-block:: json
+可能的响应代码：200
 
-   {
-       "code": 200,
-       "message": "Server information retrieved successfully",
-       "data": {
-           "server_name": "CFMS WebSocket Server",
-           "version": "0.1.0.250919_alpha",
-           "protocol_version": 3,
-           "lockdown": false
-       }
-   }
+.. list-table:: ``data`` 结构
+    :header-rows: 1
+    :widths: 15 10 50
 
-**字段说明**：
-
-- ``server_name``: 服务器名称
-- ``version``: 服务器版本
-- ``protocol_version``: 协议版本号
-- ``lockdown``: 是否处于锁定模式
+    * - 字段
+      - 值类型
+      - 说明
+    * - server_name
+      - String
+      - 服务器名称
+    * - version
+      - String
+      - 服务器版本
+    * - protocol_version
+      - Integer
+      - 协议版本号
+    * - lockdown
+      - Boolean
+      - 是否处于锁定模式
 
 login - 用户登录
 ^^^^^^^^^^^^^^^^^^^
 
-使用用户名和密码登录系统。
+使用用户名和密码登录，获取认证令牌。
 
-**认证要求**：无
+**需要认证**：否
 
-**请求数据**：
+**请求参数**:
+
+:param str username: 用户名。
+:param str password: 密码。
+:param str 2fa_token: 双因素验证令牌。
+:type 2fa_token: str | None
+
+**响应**:
 
 .. list-table::
    :header-rows: 1
-   :widths: 15 10 50
+   :widths: 10 20 50
+    * - 代码
+        - 含义
+        - 说明
+    * - 200
+        - OK
+        - 登录成功
+    * - 4001
+        - Password Requirement Not Met
+        - 密码不符合安全要求，因此需要重设
+    * - 4002
+        - Password Expired
+        - 密码过期，因此需要重设
+    * - 4003
+        - User Not Active
+        - 用户未激活，因此无法登录
 
-   * - 字段
+.. list-table:: ``data`` 结构
+   :widths: 20 15 65
+   :header-rows: 1
+
+   * - 字段名
      - 类型
      - 说明
-   * - username
-     - String
-     - 用户名，长度至少 1
-   * - password
-     - String
-     - 密码，长度至少 1
-
-**请求示例**：
-
-.. code-block:: json
-
-   {
-       "action": "login",
-       "data": {
-           "username": "admin",
-           "password": "your_password"
-       },
-       "username": "",
-       "token": ""
-   }
-
-**成功响应（无 2FA）**：
-
-.. code-block:: json
-
-   {
-       "code": 200,
-       "message": "Login successful",
-       "data": {
-           "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
-           "exp": 1699999999.0,
-           "nickname": "管理员",
-           "permissions": ["shutdown", "create_document", ...],
-           "groups": ["sysop", "user"]
-       },
-       "protocol_version": 3
-   }
-
-**需要 2FA 验证响应**：
-
-.. code-block:: json
-
-   {
-       "code": 202,
-       "message": "Two-factor authentication required",
-       "data": {
-           "method": "totp"
-       },
-       "protocol_version": 3
-   }
-
-**字段说明**：
-
-- ``token``: JWT 认证令牌，有效期 1 小时
-- ``exp``: 令牌过期时间戳
-- ``nickname``: 用户昵称
-- ``permissions``: 用户拥有的所有权限列表
-- ``groups``: 用户所属的用户组列表
-
-**错误响应**：
-
-- ``400``: 缺少用户名或密码
-- ``401``: 用户名或密码错误或 2FA 验证码无效
-- ``403``: 密码已过期或不符合要求，需要修改
-
-.. note::
-
-   当用户启用了两步验证时，首次登录会返回 202 状态码，需要在请求的 ``data`` 中添加 ``2fa_token`` 字段（6位验证码）重新提交登录请求。
+   * - ``token``
+     - string
+     - 认证令牌，后续 WSS 消息需在 header 或 payload 中携带。
+   * - ``exp``
+     - float
+     - 令牌过期的 Unix 时间戳。
+   * - ``permissions``
+     - array
+     - 用户拥有的权限标识符列表。
 
 refresh_token - 刷新令牌
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 刷新用户的 JWT 令牌以延长会话时间。
 
-**认证要求**：是
+**需要认证**：是
 
 **请求**：
 

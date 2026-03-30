@@ -208,18 +208,21 @@ HTTP 风格状态码
    :header-rows: 1
    :widths: 10 20 50
 
-   * - 代码
-     - 含义
-     - 说明
-   * - 999
-     - Lockdown
-     - 服务器处于锁定模式，仅允许特定操作
-   * - 4001
-     - Password Requirement Not Met
-     - 密码不符合安全要求，因此需要重设
-   * - 4002
-     - Password Expired
-     - 密码过期，因此需要重设
+    * - 代码
+        - 含义
+        - 说明
+    * - 999
+        - Lockdown
+        - 服务器处于锁定模式，仅允许特定操作
+    * - 4001
+        - Password Requirement Not Met
+        - 密码不符合安全要求，因此需要重设
+    * - 4002
+        - Password Expired
+        - 密码过期，因此需要重设
+    * - 4003
+        - User Not Active
+        - 用户未激活，因此无法登录
 
 认证流程
 --------
