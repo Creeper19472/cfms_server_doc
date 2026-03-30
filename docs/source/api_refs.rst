@@ -93,7 +93,7 @@ login - 用户登录
 :param str username: 用户名。
 :param str password: 密码。
 :param str 2fa_token: 双因素验证令牌。
-:type 2fa_token: str | None
+.. :type 2fa_token: str | None
 
 **响应**:
 
