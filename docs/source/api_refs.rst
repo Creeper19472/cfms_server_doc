@@ -2708,7 +2708,6 @@ lockdown - 锁定系统
 以下操作在锁定模式下仍可使用：
 
 - server_info
-- register_listener
 - login
 - refresh_token
 - validate_2fa

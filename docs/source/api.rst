@@ -376,7 +376,6 @@ HTTP 风格状态码
 
 1. **server_info** - 获取服务器信息
 2. **login** - 用户登录
-3. **register_listener** - 注册为监听连接
 
 文件传输
 --------
@@ -433,7 +432,6 @@ CFMS 通过特殊的任务机制处理文件上传和下载。
 服务器可以进入"锁定模式"，此时仅允许特定操作：
 
 - server_info
-- register_listener
 - login
 - refresh_token
 - upload_file

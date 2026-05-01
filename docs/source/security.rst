@@ -289,7 +289,6 @@ Lockdown 模式
 锁定模式下，只允许：
 
 - ``server_info``
-- ``register_listener``
 - ``login``
 - ``refresh_token``
 - ``upload_file``

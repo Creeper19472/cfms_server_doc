@@ -16,6 +16,8 @@ CFMS 是自由软件，采用 Apache 2.0 许可证发布。在特定的条件下
    本手册主要由 AI 生成和更新，可能存在不准确或过时的信息。在我们完成对手册的全面审订之
    前，请考虑参考源代码以验证细节。
 
+   您也可以参考我们在 DeepWiki 上自动生成的文档：https://deepwiki.com/cfms-dev/cfms_on_websocket
+
 内容
 --------
 
