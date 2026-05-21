@@ -26,6 +26,14 @@ git clone https://github.com/cfms-dev/cfms_on_websocket.git --depth=1
 !!! warning
     请确保您在启动服务端前设置了正确的工作目录，因为服务端的文件读写是基于相对路径而非绝对路径进行的。错误的工作目录将导致不可预知的后果。
 
+运行下面的命令来初始化子模块，它们包括一套简单的证书工具和预置的证书库，后者允许服务端识别持有由开发者签发的证书的客户端：
+
+```bash
+cd cfms_on_websocket/src
+git submodule init
+git submodule update --depth=1
+```
+
 ## 调整配置文件
 
 代码仓库中不含可由服务端直接读取的配置文件，而仅含有一份范本（`config.toml.sample`）。由于服务端不会在缺失配置文件时自动生成它，因此在初次启动服务端前我们需要手动完成配置。
