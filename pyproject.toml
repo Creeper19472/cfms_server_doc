@@ -1,8 +1,17 @@
 [build-system]
-requires = ["flit_core >=3.2,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
-name = "CFMS_Server"
-authors = [{name = "Creeper19472", email = "creeper19472@crpteam.club"}]
-dynamic = ["version", "description"]
+name = "cfms-server-doc"
+version = "0.1.0"
+description = "CFMS Server Documentation"
+requires-python = ">=3.13"
+dependencies = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.24.0",
+]
+
+[tool.uv]
+package = false

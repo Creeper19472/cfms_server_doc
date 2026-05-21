@@ -1,0 +1,46 @@
+site_name: CFMS on WebSocket Server-side Documentation
+repo_url: https://github.com/cfms-dev/cfms_on_websocket.git
+
+theme:
+  name: material
+  language: zh
+  palette:
+    # light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: 切换到暗黑模式
+    # dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: 切换到亮色模式
+  features:
+    - navigation.tabs
+    - search.suggest
+    - content.code.copy
+    - content.code.annotate
+    - content.code.select
+
+nav:
+  - 首页: index.md
+  - 在开始之前:
+    - CFMS 不是什么: what-cfms-is-not.md
+  - 快速开始: getting-started.md
+  - 配置文件: configuration.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+      slugify: !!python/object/apply:pymdownx.slugs.slugify
+        kwds:
+          case: lower
