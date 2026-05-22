@@ -76,3 +76,39 @@
 | password | String | "" | （仅 MySQL）指定登录到数据库所用的密码。 |
 | name | String | "app_db" | （仅 MySQL）指定数据库的名称。 |
 | charset | String | "utf8mb4" | （仅 MySQL）指定连接字符集。 |
+
+## 提供者（Providers） `[provider]`
+
+配置存储、缓存和事件系统的提供者类型。
+
+| 键 | 类型 | 默认值 | 说明 |
+|---|---:|---|---|
+| caching | String | "memory" | 缓存提供者类型。可选值为 `memory` 和 `redis`。 |
+| storage | String | "local" | 存储提供者类型。可选值为 `local` 和 `s3`。 |
+| event_bus | String | "local" | 事件系统提供者类型。可选值为 `local` 和 `redis`。 |
+
+## Redis `[redis]`
+
+当启用了与 Redis 相关的功能时，配置与 Redis 连接相关的设置。
+
+| 键 | 类型 | 默认值 | 说明 |
+|---|---:|---|---|
+| host | String | "localhost" | 指定数据库服务器的主机名。 |
+| port | Integer | 6379 | 指定数据库服务器的端口。 |
+| password | String | "" | 指定连接到数据库使用的密码。 |
+| db   | Integer | 0 | 指定数据库索引。注意集群化模式下的 Redis 可能仅支持 `db0`。 |
+
+## Simple Storage Service (S3) `[s3]`
+
+当指定 S3 作为存储提供者时，配置与 S3 连接相关的设置。服务端理论上兼容任意支持 S3 协议的对象存储服务，而不要求必须使用由 Amazon 提供的对象存储。
+
+| 键 | 类型 | 默认值 | 说明 |
+|---|---:|---|---|
+| bucket | String | "" | 存储桶名称。**注意：服务端不会在目标存储桶不存在时尝试自动创建它。** |
+| endpoint_url | String | "" | 自定义的 Endpoint 地址。供连接到非 Amazon 的 S3 服务器时使用。 |
+| access_key_id | String | "" | 访问存储桶所需的 Access Key ID (AK)。 |
+| secret_access_key | String | "" | 访问存储桶所需的 Secret Access Key (SK)。 |
+| region_name | String | "" | 存储桶的地域。若不指定，将使用硬编码在服务端中的默认值（`us-east-1`）。 |
+
+!!! note
+    服务端被硬编码为在访问 S3 存储桶时使用**虚拟主机风格**（Virtual-Hosted Style），这是 AWS S3 的默认和推荐方式。路径风格（Path-Style）不受支持。
