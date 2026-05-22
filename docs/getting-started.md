@@ -34,6 +34,20 @@ git submodule init
 git submodule update --depth=1
 ```
 
+## 安装依赖
+
+运行以下命令来安装必要的依赖：
+
+```bash
+uv sync --upgrade
+```
+
+这将安装服务端以最小状态运行时所需要的最低限度的依赖。然而，一些可选功能需要额外的依赖才能正常工作，可以运行下面的命令来为 S3 对象存储、Redis 和 MySQL 支持等可选功能安装依赖：
+
+```bash
+uv sync --extra cluster --extra mysql
+```
+
 ## 调整配置文件
 
 代码仓库中不含可由服务端直接读取的配置文件，而仅含有一份范本（`config.toml.sample`）。由于服务端不会在缺失配置文件时自动生成它，因此在初次启动服务端前我们需要手动完成配置。
