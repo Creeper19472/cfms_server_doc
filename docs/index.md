@@ -6,7 +6,9 @@ CFMS 是针对“如何在互联网环境下尽可能使保密信息得到安全
 
 若希望快速设置本基于 WebSocket 协议实现的服务端（后称“服务端”），请参阅 [快速开始](getting-started.md)。
 
-若希望了解服务端和与之适配的客户端所遵循的通信协议，请参阅 [协议规范](protocol.md) 一节。有关服务端的技术细节，请参阅 [技术架构](technical-structure.md)。
+参阅 [功能概览](features/index.md) 以粗略地了解服务端支持的功能。
+
+<!-- 若希望了解服务端和与之适配的客户端所遵循的通信协议，请参阅 [协议规范](protocol.md) 一节。有关服务端的技术细节，请参阅 [技术架构](technical-structure.md)。 -->
 
 !!! note
     本文档尚在完善当中。在此之前，您可以参考[由 DeepWiki 自动生成的文档](https://deepwiki.com/cfms-dev/cfms_on_websocket)。
