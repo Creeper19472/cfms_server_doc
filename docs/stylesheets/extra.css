@@ -1,19 +1,31 @@
-[data-md-color-scheme="slate"] .typedtalk-wrapper,
-[data-md-color-scheme="slate"] #rtfd-sidebar,
-[data-md-color-scheme="slate"] .rtfd-advertisers,
-[data-md-color-scheme="slate"] [id^="rtfd-"] {
+[data-md-color-scheme="slate"] .ethical-sidebar {
     background-color: var(--md-code-bg-color) !important;
-    color: var(--md-typeset-color) !important;
-    border-color: var(--md-border-color) !important;
+    border: 1px solid var(--md-border-color) !important;
+    padding: 12px !important;
+    border-radius: 4px !important;
 }
 
-[data-md-color-scheme="slate"] .typedtalk-wrapper a,
-[data-md-color-scheme="slate"] [id^="rtfd-"] a {
+[data-md-color-scheme="slate"] .ethical-sidebar .ethical-text a {
+    color: var(--md-typeset-color) !important;
+}
+
+[data-md-color-scheme="slate"] .ethical-sidebar .ea-headline {
     color: var(--md-accent-fg-color) !important;
 }
 
-[data-md-color-scheme="slate"] .typedtalk-wrapper img,
-[data-md-color-scheme="slate"] [id^="rtfd-"] img {
-    opacity: 0.8;
-    filter: brightness(0.9);
+[data-md-color-scheme="slate"] .ethical-sidebar .ethical-callout,
+[data-md-color-scheme="slate"] .ethical-sidebar .ethical-callout a {
+    color: var(--md-typeset-color) !important;
+    opacity: 0.6;
+}
+
+[data-md-color-scheme="slate"] .ethical-sidebar .ethical-image-link img {
+    opacity: 0.85;
+    filter: brightness(0.95);
+    transition: opacity 0.2s, filter 0.2s;
+}
+
+[data-md-color-scheme="slate"] .ethical-sidebar .ethical-image-link img:hover {
+    opacity: 1;
+    filter: brightness(1);
 }
