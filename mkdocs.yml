@@ -37,6 +37,8 @@ nav:
   - 功能: 
     - 概览: features/index.md
     - 对象访问控制: features/object-access-control.md
+    - 密钥环: features/keyrings.md
+    - 修订版本: features/revisions.md
 
 markdown_extensions:
   - admonition
