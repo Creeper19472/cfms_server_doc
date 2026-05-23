@@ -1,0 +1,19 @@
+[data-md-color-scheme="slate"] .typedtalk-wrapper,
+[data-md-color-scheme="slate"] #rtfd-sidebar,
+[data-md-color-scheme="slate"] .rtfd-advertisers,
+[data-md-color-scheme="slate"] [id^="rtfd-"] {
+    background-color: var(--md-code-bg-color) !important;
+    color: var(--md-typeset-color) !important;
+    border-color: var(--md-border-color) !important;
+}
+
+[data-md-color-scheme="slate"] .typedtalk-wrapper a,
+[data-md-color-scheme="slate"] [id^="rtfd-"] a {
+    color: var(--md-accent-fg-color) !important;
+}
+
+[data-md-color-scheme="slate"] .typedtalk-wrapper img,
+[data-md-color-scheme="slate"] [id^="rtfd-"] img {
+    opacity: 0.8;
+    filter: brightness(0.9);
+}

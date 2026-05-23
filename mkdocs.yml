@@ -27,6 +27,8 @@ theme:
     - content.code.copy
     - content.code.annotate
     - content.code.select
+  extra_css:
+    - stylesheets/extra.css
 
 nav:
   - 首页: index.md
