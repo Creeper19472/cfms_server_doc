@@ -36,9 +36,10 @@ nav:
   - 配置文件: configuration.md
   - 功能: 
     - 概览: features/index.md
+    - 修订版本: features/revisions.md
     - 对象访问控制: features/object-access-control.md
     - 密钥环: features/keyrings.md
-    - 修订版本: features/revisions.md
+    - 锁定状态: features/lockdown.md
 
 markdown_extensions:
   - admonition
