@@ -50,9 +50,13 @@
 | enable_passwd_force_expiration | Boolean | true | 如果启用，密码必须在 `passwd_expire_after_days` 定义的周期后更改。 |
 | require_passwd_enforcement_changes | Boolean | true | 强制具有不符合要求的密码（例如，过短）的用户在登录时立即更改密码。 |
 | passwd_expire_after_days | Integer | 365 | 密码被标记为过期前的天数。 |
-| passwd_must_contain | Array | [] | _未实现的功能。_ |
+| passwd_rules | Array | [`'[A-Z]'`, `'[a-z]'`, `'[0-9]'`, `'[!@#$%^&*()]'`] | 密码需符合的规则，以正则表达式表示，视数组中的每个字符串为一条。 |
+| passwd_min_passed_count | Integer | 2 | 密码需满足的规则的最小条数，应为非负整数。 |
 | require_client_cert | Boolean | false | 启用 mTLS。如果为 `true`，服务器将根据 CA 验证客户端证书。 |
 | client_cert_ca_path | String | "./content/ssl/client/" | 包含用于客户端验证的受信任 CA 证书的目录。 |
+
+!!! note "注意 `passwd_min_passed_count` 具有的隐式行为"
+    在内部实现中，`passwd_min_passed_count` 的值实际被隐式地设置为 $\min(\text{passwd_min_passed_count}, \text{len}(\text{passwd_rules}))$，以确保规则检查总能在密码满足所有规则要求时通过。
 
 ## 访问控制 `[access]`
 
