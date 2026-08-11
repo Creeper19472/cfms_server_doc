@@ -9,9 +9,7 @@
 若要通过代码仓库直接部署服务端，并希望在之后继续从代码仓库拉取更新，您还需要在环境中准备好 [Git](https://git-scm.com)。以下的内容均假定您已满足本节前述的所有要求。在之后的教程中，我们将一直使用 `uv` 来管理依赖，不过使用 `pip` 等其他工具理论上也是可行的。
 
 !!! warning
-    截至 Python 3.14.5 发布之时，Python 的官方分发版所捆绑的 OpenSSL 版本均较低（版本 3.5 以下），因此缺少对[后量子加密算法](https://csrc.nist.gov/projects/post-quantum-cryptography)（Post-Quantum Cryptography, PQC）的支持，而这可能导致服务器与客户端的通信受“先窃取，后解密”的威胁。现在，当运行在任何捆绑了过低版本的 OpenSSL 的 Python 分发版上时，服务端每次启动时都将在日志中输出一条警告信息，以提醒系统管理员使用更高的 OpenSSL 版本。
-
-    Python 的一些第三方分发版已捆绑了更高版本的 OpenSSL ，使用 `uv` 即可方便地安装它们。
+    服务端会检查 Python 运行时实际链接的 OpenSSL 版本。低于 3.5 时，服务端将在每次启动时输出警告，因为该运行时缺少服务端所期望的[后量子加密算法](https://csrc.nist.gov/projects/post-quantum-cryptography)（Post-Quantum Cryptography, PQC）支持，通信可能面临“先窃取，后解密”的威胁。可以运行 `python -c "import ssl; print(ssl.OPENSSL_VERSION)"` 核对实际版本；正式部署应选择链接 OpenSSL 3.5 或更高版本的 Python 分发版。
 
 ## 拉取代码仓库
 
