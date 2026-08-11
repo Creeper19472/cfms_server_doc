@@ -36,6 +36,7 @@ nav:
   - 配置文件: configuration.md
   - 功能: 
     - 概览: features/index.md
+    - 文档管理与文件传输: features/document-management.md
     - 修订版本: features/revisions.md
     - 对象访问控制: features/object-access-control.md
     - 密钥环: features/keyrings.md

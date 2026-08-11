@@ -114,7 +114,7 @@
 
 持有相应管理权限的管理员可以查看或精确解除仍在生效的身份验证锁定。
 
-### 请求速率控制 `[security.request_rate_control]`
+### 请求速率控制 `[security.request_rate_control]` {#request-rate-control}
 
 本节的令牌桶限制独立于始终生效的准入控制。更完整的工作方式、客户端响应和分布式部署注意事项请参阅[请求速率控制](features/rate-limiting.md)。
 
