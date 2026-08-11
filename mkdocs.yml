@@ -41,7 +41,10 @@ nav:
     - 对象访问控制: features/object-access-control.md
     - 密钥环: features/keyrings.md
     - 锁定模式: features/lockdown.md
+    - 身份验证与安全管理: features/security-controls.md
     - 请求速率控制: features/rate-limiting.md
+  - 扩展: extensions.md
+  - 部署与维护: maintenance.md
 
 markdown_extensions:
   - admonition
