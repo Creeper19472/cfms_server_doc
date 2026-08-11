@@ -39,7 +39,8 @@ nav:
     - 修订版本: features/revisions.md
     - 对象访问控制: features/object-access-control.md
     - 密钥环: features/keyrings.md
-    - 锁定状态: features/lockdown.md
+    - 锁定模式: features/lockdown.md
+    - 请求速率控制: features/rate-limiting.md
 
 markdown_extensions:
   - admonition
