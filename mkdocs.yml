@@ -45,6 +45,8 @@ nav:
     - 请求速率控制: features/rate-limiting.md
   - 扩展: extensions.md
   - 部署与维护: maintenance.md
+  - 高级主题:
+    - 数据库设计限制: advanced/database-limits.md
 
 markdown_extensions:
   - admonition
