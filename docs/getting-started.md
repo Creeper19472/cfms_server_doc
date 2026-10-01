@@ -2,14 +2,16 @@
 
 ## 前置条件
 
-至本文档修订之时止，服务端需 Python 3.14 及以上版本方可正常运行。请提前配置好 Python 环境和用于管理依赖的包管理器。作为参考，我们推荐使用 `uv` 来管理依赖和虚拟环境，它是一款用 Rust 编写的 Python 包管理器和环境管理器，具有相比 `pip` 等工具而言极高的性能，且能带来其他多种好处。
+至本文档修订之时止，版本 0.11.0 及以上的服务端需 Python 3.15 及以上版本、OpenSSL 3.5 及以上版本方可正常运行。
 
-由于服务端采用 `threading` 方案实现，使用 Python 的自由线程（freethreaded）版本或可使本服务端在多核利用上取得更好的表现。不过，我们尚未就此开展全面的测试，因此不能断定这么做是否能在性能上带来实际提升。
-
-若要通过代码仓库直接部署服务端，并希望在之后继续从代码仓库拉取更新，您还需要在环境中准备好 [Git](https://git-scm.com)。以下的内容均假定您已满足本节前述的所有要求。在之后的教程中，我们将一直使用 `uv` 来管理依赖，不过使用 `pip` 等其他工具理论上也是可行的。
+请提前配置好 Python 环境和用于管理依赖的包管理器。作为参考，我们推荐使用 `uv` 来管理依赖和虚拟环境，它是一款用 Rust 编写的 Python 包管理器和环境管理器，具有相比 `pip` 等工具而言极高的性能，且能带来其他多种好处。
 
 !!! warning
-    服务端会检查 Python 运行时实际链接的 OpenSSL 版本。低于 3.5 时，服务端将在每次启动时输出警告，因为该运行时缺少服务端所期望的[后量子加密算法](https://csrc.nist.gov/projects/post-quantum-cryptography)（Post-Quantum Cryptography, PQC）支持，通信可能面临“先窃取，后解密”的威胁。可以运行 `python -c "import ssl; print(ssl.OPENSSL_VERSION)"` 核对实际版本；正式部署应选择链接 OpenSSL 3.5 或更高版本的 Python 分发版。
+    较老旧的 Linux 分发版可能仍携带低版本的 OpenSSL，经系统包管理器安装的 Python 或许会基于它们构建。由 `uv` 安装和管理的 Python 分发版则通常会自行携带 OpenSSL 库，可以解决此问题。
+
+尽管使用 Python 的自由线程（freethreaded）版本或可使本服务端取得更好的表现，但受制于部分依赖的支持问题，服务端**尚无法在自由线程分发版下正常运作**。
+
+若要通过代码仓库直接部署服务端，并希望在之后继续从代码仓库拉取更新，您还需要在环境中准备好 [Git](https://git-scm.com)。以下的内容均假定您已满足本节前述的所有要求。在之后的教程中，我们将一直使用 `uv` 来管理依赖，不过使用 `pip` 等其他工具理论上也是可行的。
 
 ## 拉取代码仓库
 
@@ -19,7 +21,7 @@
 git clone https://github.com/cfms-dev/cfms_on_websocket.git --depth=1 --recurse-submodules --shallow-submodules
 ```
 
-这将把代码仓库克隆到您工作目录下的 `cfms_on_websocket` 文件夹，并仅拉取默认分支最近的一次提交及其子模块。在该文件夹下，`src/` 是存放服务端代码的实际目录，今后运行服务端和维护命令时也应当将它设置为工作目录。
+这将把代码仓库克隆到您工作目录下的 `cfms_on_websocket` 文件夹，并仅拉取默认分支最近的一次提交及其子模块。在该文件夹下，`src/` 是存放服务端代码的实际目录；启动 `main.py` 时必须将它设为工作目录。`maintain` 则可从项目根、`src/` 或其子目录调用，并会自动定位最近的运行根。
 
 !!! warning
     请确保您在启动服务端前设置了正确的工作目录，因为服务端的文件读写是基于相对路径而非绝对路径进行的。错误的工作目录将导致不可预知的后果。
@@ -38,16 +40,21 @@ git submodule update --depth=1
 
 ```bash
 cd cfms_on_websocket
-uv sync --upgrade
+uv sync
 ```
 
-这将安装服务端以最小状态运行时所需要的最低限度的依赖。然而，一些可选功能需要额外的依赖才能正常工作，可以运行下面的命令来为 S3 对象存储、Redis 和 MySQL 支持等可选功能安装依赖：
+这将安装服务端以最小状态运行时所需的依赖。然而，一些可选功能需要额外的依赖才能正常工作，可以利用形如下方的命令安装依赖：
 
 ```bash
-uv sync --extra cluster --extra mysql --extra ext_oidc_sso
+uv sync --extra cluster --extra mysql
+# PostgreSQL 部署改用：
+uv sync --extra cluster --extra postgresql
+
+# 按需添加扩展运行时：
+uv sync --extra ext-oidc-sso --extra ext-http-api --extra ext-scheduling-cluster
 ```
 
-其中，`cluster` 为 Redis 和 S3 提供者安装依赖，`mysql` 安装 MySQL 驱动，而 `ext_oidc_sso` 安装 OpenID Connect 单点登录扩展所需的依赖。仅需启用其中部分功能时，可以省略无关的 `--extra` 参数。
+其中，`cluster` 为 Redis 和 S3 Provider 安装依赖，`mysql` 与 `postgresql` 分别安装数据库驱动，`ext-oidc-sso` 安装 OpenID Connect 单点登录运行时，`ext-http-api` 安装可选 HTTPS/FastAPI 框架，`ext-scheduling-cluster` 安装 Redis 集群调度所需的 Dramatiq。
 
 ## 调整配置文件
 
@@ -71,9 +78,9 @@ uv sync --extra cluster --extra mysql --extra ext_oidc_sso
 
 之后，我们需要编辑 `config.toml`。此配置文件中有相当数目的可配置项，不过为了快速开始，我们暂时只需关注其中的小部分设置。
 
-在 `server` 一节下，`host` 指定了服务端监听的地址，`port` 指定了监听的端口。服务端支持 SQLite 和 MySQL 两种类型的数据库引擎，如果您没有一个 MySQL 服务器，无需调整任何配置，服务端便可默认基于 SQLite 数据库运行。若希望以 MySQL 作为数据库引擎，可以通过 `database` 节下的 `type` 指定要使用的数据库引擎，并在该节的其他配置项中填写目标服务器地址和登录凭据。如有疑问，随配置文件附上的注释和[配置文件](configuration.md)一节可提供更多信息。
+在 `server` 一节下，`host` 指定服务端监听地址，`port` 指定端口。服务端支持 SQLite、MySQL 和 PostgreSQL；单机快速开始无需调整即可使用 SQLite。共享数据库部署应通过 `database.type` 选择引擎并填写连接信息，同时安装相应驱动。如有疑问，随配置范本附上的注释和[配置文件](configuration.md)一节可提供更多信息。
 
-`server.secret_key` 和 `security.pepper` 在此时可以暂时保持为空。服务端将在首次初始化时分别生成随机值并写回配置文件；生成后务必将它们作为机密信息妥善保管。
+`server.secret_key` 和 `security.pepper` 在此时应保持为空。当 `src/init` 尚不存在时，服务端会在首次初始化时为两者生成随机值并写回配置文件；即使事先填写了值，首次初始化流程也会覆盖它们。在生成后，请记得将它们作为机密信息妥善保管。
 
 ## 启动服务端
 
@@ -108,7 +115,7 @@ uv run python main.py
 ```log
 [2026-08-11 19:22:01,359 INFO    ] Database not initialized, initializing now...
 [2026-08-11 19:22:02,105 INFO    ] Initializating CFMS WebSocket server...
-[2026-08-11 19:22:02,106 INFO    ] CFMS Core Version: 0.4.1.260811_alpha
+[2026-09-09 19:22:02,106 INFO    ] CFMS Core Version: 0.8.0
 [2026-08-11 19:22:02,212 INFO    ] Loaded 0 banned subnet(s) from database.
 [2026-08-11 19:22:02,220 INFO    ] CFMS WebSocket server started at wss://[::1]:5104
 ```
